@@ -24,10 +24,10 @@
   .pp-cover-title, .pp-cover-sub, .pp-cover-date, .pp-cover-org {
     position: absolute; left: 0; width: 100%; text-align: center;
     font-family: "Malgun Gothic", "맑은 고딕", sans-serif; font-weight: 700; }
-  .pp-cover-title { top: 11.4%; color: #ff0000; font-size: 28pt; }
+  .pp-cover-title { top: 11.4%; color: #000; font-size: 28pt; }
   .pp-cover-sub   { top: 19.0%; color: #000; font-size: 28pt;
                     text-decoration: underline; letter-spacing: 0.05em; }
-  .pp-cover-date  { top: 74.5%; color: #ff0000; font-size: 20pt; letter-spacing: 0.35em; }
+  .pp-cover-date  { top: 74.5%; color: #000; font-size: 20pt; letter-spacing: 0.35em; }
   .pp-cover-org   { top: 80.5%; color: #000; font-size: 18pt; }
 
   /* ── 본문 ── */
@@ -56,8 +56,9 @@
 
   .signline { text-align: center; font-size: 13pt; font-weight: 700; margin: 22pt 0 10pt; }
   .signdate { text-align: center; font-size: 11pt; font-weight: 700; margin: 0 0 18pt; }
-  .notice   { text-align: center; font-size: 9.5pt; font-weight: 700; margin-top: 14pt; }
   .blankline { border-bottom: 1px solid #000; height: 14pt; margin: 4pt 0; }
+  /* 서명표·서명문구·날짜가 페이지 경계에서 갈라지지 않게 한 덩어리로 묶는다 */
+  .signblock { page-break-inside: avoid; break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -178,6 +179,7 @@
 <div class="blankline"></div>
 <div class="blankline"></div>
 
+<div class="signblock">
 <table class="sign">
   <tr>
     <th style="width:11%">구분</th><th style="width:39%">대행사</th>
@@ -204,8 +206,8 @@
 
 <div class="signline">계약 당사자 확인 및 서명</div>
 <div class="signdate fill">{{서명일자}}</div>
+</div>
 
-<div class="notice">※ 계약 체결 전 제2조의 과업·비용·일정·저작권·2차 활용 조건을 반드시 확인한 후 사용하십시오.</div>
 
 </body>
 </html>
