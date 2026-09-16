@@ -96,6 +96,23 @@ function doPost(e) {
     var 기대 = PropertiesService.getScriptProperties().getProperty(비밀키_속성);
     if (!기대)                      return 응답({ 성공: false, 오류: '비밀키 미설정. [비밀키만들기] 를 실행하세요.' });
     if (본문.비밀키 !== 기대)        return 응답({ 성공: false, 오류: '비밀키 불일치' });
+
+    // 시트 읽기 — 시트를 비공개로 바꾼 뒤 로컬에서 내용을 확인할 길이 이것뿐이다.
+    // 쓰지 않고 읽기만 한다. 비밀키를 아는 쪽만 호출할 수 있다.
+    if (본문.동작 === '시트읽기') {
+      return 응답(시트읽기(본문.시트, 본문.탭, 본문.최대));
+    }
+
+    // 6번 노션 업로드 결과 기록 — 도구/노션올리기.sh 가 올린 뒤 알려 준다
+    if (본문.동작 === '공고기록') {
+      if (typeof 이력기록_6 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      이력기록_6(본문.브랜드, 본문.링크);
+      if (typeof 문의탭반영 === 'function') { try { 문의탭반영(); } catch (e) {} }
+      return 응답({ 성공: true, 기록: 본문.브랜드 });
+    }
+
     if (!본문.데이터 || !본문.데이터.length) return 응답({ 성공: false, 오류: '데이터가 비어 있습니다.' });
 
     // 웹앱은 302 로 응답을 돌려준다. 리다이렉트가 POST 로 재전송되면 두 번 실행되므로,
@@ -119,6 +136,66 @@ function doPost(e) {
 function 응답(o) {
   return ContentService.createTextOutput(JSON.stringify(o))
          .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * 시트 내용을 읽어 돌려준다. 쓰지 않는다.
+ *
+ * 왜 필요한가
+ *   광고주 관리 시트·5-0 응답 시트를 비공개로 바꿨다. 계좌번호와 계정 비밀번호가
+ *   링크만 알면 보이는 상태였기 때문이다. 대신 로컬에서 내용을 확인할 길이 막혔다.
+ *   이 동작은 비밀키를 아는 쪽만 호출할 수 있는 읽기 전용 통로다.
+ *
+ * 시트 별칭
+ *   통합 / 응답 / 관리  또는 스프레드시트 ID 를 직접 넘긴다.
+ *   탭을 비우면 첫 번째 탭을 읽는다.
+ */
+function 시트읽기(시트, 탭, 최대) {
+  var 별칭 = {
+    '통합': (typeof 통합시트_ID !== 'undefined') ? 통합시트_ID : '',
+    '응답': (typeof 응답시트_ID !== 'undefined') ? 응답시트_ID : '',
+    '관리': PropertiesService.getScriptProperties().getProperty('관리시트_ID') || ''
+  };
+  var id = 별칭[시트] || 시트 || '';
+  if (!id) return { 성공: false, 오류: '시트를 찾을 수 없습니다: ' + 시트 };
+
+  var ss;
+  try { ss = SpreadsheetApp.openById(id); }
+  catch (e) { return { 성공: false, 오류: '시트를 열 수 없습니다: ' + e }; }
+
+  var 탭목록 = ss.getSheets().map(function (s) {
+    return { 이름: s.getName(), gid: s.getSheetId(), 행: s.getLastRow(), 열: s.getLastColumn() };
+  });
+
+  var sh = null;
+  if (탭) {
+    sh = ss.getSheetByName(탭);
+    if (!sh) {
+      // 이름이 아니라 gid 로 넘어올 수도 있다
+      var g = String(탭);
+      ss.getSheets().forEach(function (s) { if (String(s.getSheetId()) === g) sh = s; });
+    }
+    if (!sh) return { 성공: false, 오류: '탭이 없습니다: ' + 탭, 탭목록: 탭목록 };
+  } else {
+    sh = ss.getSheets()[0];
+  }
+
+  var 한도 = Math.min(최대 || 200, 500);          // 응답이 너무 커지지 않게 제한
+  var 끝행 = Math.min(sh.getLastRow(), 한도);
+  var 값 = (끝행 > 0 && sh.getLastColumn() > 0)
+    ? sh.getRange(1, 1, 끝행, sh.getLastColumn()).getDisplayValues()
+    : [];
+
+  return {
+    성공: true,
+    시트명: ss.getName(),
+    탭명: sh.getName(),
+    행: sh.getLastRow(),
+    열: sh.getLastColumn(),
+    잘림: sh.getLastRow() > 끝행,
+    탭목록: 탭목록,
+    값: 값
+  };
 }
 
 /** 수동 — _작업/데이터.gs 를 붙여 넣은 뒤 쓴다. */
@@ -167,9 +244,20 @@ function 실행코어(데이터, 덮어쓰기) {
     var url = 문서만들기(폴더, 문서명, d);
     행들.push([브랜드, 항목값(d, '진행방식'), d.접수일 || '', url, '생성', 보완요약(d)]);
     문서.push({ 브랜드: 브랜드, 상태: '생성', 링크: url });
+
+    // 광고주 관리 워크북의 발행 이력에도 남긴다. 통합관리.gs 가 같은 프로젝트에 있을 때만.
+    if (typeof 이력기록_5_1 === 'function') {
+      try { 이력기록_5_1(브랜드, d.날짜 || '', url, 보완요약(d)); }
+      catch (err) { Logger.log('발행 이력 기록 실패: ' + err); }
+    }
   });
 
   var 관리url = 관리시트갱신(폴더, 행들);
+
+  // 광고주 관리 워크북의 문의 탭까지 한 번에 반영한다
+  if (typeof 문의탭반영 === 'function') {
+    try { 문의탭반영(); } catch (err) { Logger.log('문의 탭 반영 실패: ' + err); }
+  }
 
   return {
     성공: true,

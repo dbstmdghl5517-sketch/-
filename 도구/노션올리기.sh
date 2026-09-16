@@ -232,3 +232,32 @@ done
 
 echo "완료: $TITLE"
 echo "  $PAGEURL"
+
+# ── 광고주 관리 워크북에 기록 ──
+# 어느 업체 공고를 언제 올렸는지 한 곳에서 보이게 한다.
+# 웹앱이 설정돼 있지 않으면 조용히 넘어간다 (노션 업로드 자체는 이미 끝났다).
+WEBAPP="$(grep -m1 '^공고가이드_웹앱=' "$ENVFILE" | cut -d= -f2- || true)"
+KEY2="$(grep -m1 '^공고가이드_비밀키=' "$ENVFILE" | cut -d= -f2- || true)"
+if [[ -n "${WEBAPP:-}" && -n "${KEY2:-}" ]]; then
+  # 제목 앞의 날짜를 떼어 브랜드명만 남긴다. 이력은 브랜드명으로 짝을 맞춘다.
+  BRAND="$(printf '%s' "$TITLE" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} //')"
+  cat > "$TMP/rec.pl" <<'PERLEOF'
+use strict; use warnings;
+my ($key, $brand, $url, $out) = @ARGV;
+$key =~ s/[^A-Za-z0-9_-]//g;
+for ($brand, $url) { s/"/\\"/g }
+open(my $O, '>:raw', $out) or die $!;
+print $O '{"비밀키":"' . $key . '","동작":"공고기록","브랜드":"' . $brand
+       . '","링크":"' . $url . '"}';
+close $O;
+PERLEOF
+  perl "$TMP/rec.pl" "$KEY2" "$BRAND" "$PAGEURL" "$TMP/rec.json"
+  RC2=$(curl -sS -L --max-time 120 -H 'Content-Type: application/json' \
+        --data-binary "@$TMP/rec.json" -o "$TMP/rec_res.json" -w '%{http_code}' "$WEBAPP" || echo 000)
+  if [[ "$RC2" == "200" ]] && grep -q '"성공":true' "$TMP/rec_res.json"; then
+    echo "  광고주 관리 시트에 기록했습니다."
+  else
+    echo "  (알림: 광고주 관리 시트 기록은 실패했습니다. 노션 업로드는 정상입니다)" >&2
+    head -c 200 "$TMP/rec_res.json" >&2; echo >&2
+  fi
+fi
