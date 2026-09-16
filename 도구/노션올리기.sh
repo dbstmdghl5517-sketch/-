@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # 공고 텍스트 → 노션 페이지 (브랜드별 새 프로젝트)
 #
-# 사용법:  bash "도구/노션올리기.sh" "<공고txt>" "<페이지 제목>"
-#          bash "도구/노션올리기.sh" "<공고txt>" "<제목>" 확인만    ← 올리지 않고 변환 결과만 본다
+# 사용법:  bash "도구/노션올리기.sh" "<공고txt>" "<페이지 제목>" [올리기|확인만] [기획형|체험단]
+#          bash "도구/노션올리기.sh" "<txt>" "<제목>"                    ← 6번 기획형 (기본)
+#          bash "도구/노션올리기.sh" "<txt>" "<제목>" 올리기 체험단      ← 4번 체험단
+#          bash "도구/노션올리기.sh" "<txt>" "<제목>" 확인만            ← 변환 결과만 본다
+#
+# 종류에 따라 상위 페이지가 다르다. 기획형과 체험단을 한 페이지에 섞지 않는다.
+#   기획형 → 연동/.env 의 노션_상위페이지
+#   체험단 → 연동/.env 의 노션_체험단페이지
+# 발행 이력에도 종류로 구분해 기록된다. 한 업체가 둘 다 진행하는 경우가 있다.
 #
 # 준비 (한 번만):
 #   1) notion.so/my-integrations → 새 통합 만들기 → 이름 아무거나 → 내부 통합 시크릿 복사
@@ -18,7 +25,13 @@
 #   - 항목                 → 노션 불릿
 #   1. 항목                → 노션 번호 목록
 #   ---                    → 구분선
+#   | 가 | 나 |            → 노션 표 (바로 다음 줄이 |---|---| 이면 첫 줄을 머리글로 본다)
+#   | --- | --- |
+#   | 1  | 2  |
 #   그 외 한 줄            → 문단 (빈 줄은 무시)
+#
+#   ※ 4번·6번 공고에는 표를 쓰지 않는다. 업로드 화면에서 표를 못 쓴다.
+#      표는 사람이 읽는 정리 문서에만 쓴다.
 #
 # ─── 함정 ───────────────────────────────────────────────────
 # 1. **셸 변수명에 한글을 쓸 수 없다.** `모드=` 는 command not found 로 죽는다.
@@ -36,6 +49,8 @@ set -euo pipefail
 SRC="${1:-}"
 TITLE="${2:-}"
 MODE="${3:-올리기}"
+KIND="${4:-기획형}"     # 기획형(6번) | 체험단(4번). 상위 페이지와 이력 기록 종류가 갈린다
+REC="${5:-기록}"        # 기록 | 기록없음. 웹앱이 아직 새 코드로 배포되지 않았을 때 건너뛴다
 
 if [[ -z "$SRC" || ! -f "$SRC" ]]; then
   echo "오류: 공고 텍스트 파일 경로를 넘겨주세요." >&2
@@ -84,10 +99,60 @@ sub block {
        . '":{"rich_text":[' . rich($text) . ']}}';
 }
 
+sub 칸 {
+  my ($s) = @_;
+  $s = '' unless defined $s;
+  $s =~ s/^\s+//; $s =~ s/\s+$//;
+  return '[{"type":"text","text":{"content":"' . esc($s) . '"}}]';
+}
+
+# 표 한 덩어리를 노션 table 블록으로. 행은 children 으로 함께 넣어야 한다.
+sub 표블록 {
+  my ($줄들, $머리글있음) = @_;
+  return () unless @$줄들;
+  my @행;
+  my $폭 = 0;
+  for my $r (@$줄들) {
+    my $t = $r;
+    $t =~ s/^\s*\|//; $t =~ s/\|\s*$//;
+    my @c = split /\|/, $t, -1;
+    $폭 = scalar(@c) if scalar(@c) > $폭;
+    push @행, \@c;
+  }
+  my @행블록;
+  for my $c (@행) {
+    my @칸들 = map { 칸($_) } @$c;
+    push @칸들, 칸('') while scalar(@칸들) < $폭;    # 칸 수가 모자라면 채운다
+    push @행블록, '{"object":"block","type":"table_row","table_row":{"cells":['
+                . join(',', @칸들) . ']}}';
+  }
+  return '{"object":"block","type":"table","table":{"table_width":' . $폭
+       . ',"has_column_header":' . ($머리글있음 ? 'true' : 'false')
+       . ',"has_row_header":false,"children":[' . join(',', @행블록) . ']}}';
+}
+
+my @줄 = <$F>;
+close $F;
+for (@줄) { s/[\r\n]+$// }
+
 my @blocks;
-while (my $l = <$F>) {
-  $l =~ s/[\r\n]+$//;
+for (my $i = 0; $i <= $#줄; $i++) {
+  my $l = $줄[$i];
   next if $l =~ /^\s*$/;
+
+  # 표 — 연속된 | 줄을 모은다
+  if ($l =~ /^\s*\|.*\|\s*$/) {
+    my @모음;
+    my $머리 = 0;
+    while ($i <= $#줄 && $줄[$i] =~ /^\s*\|.*\|\s*$/) {
+      if ($줄[$i] =~ /^\s*\|[\s|:-]+\|\s*$/) { $머리 = 1; $i++; next }   # |---|---| 구분선
+      push @모음, $줄[$i];
+      $i++;
+    }
+    $i--;
+    push @blocks, 표블록(\@모음, $머리) if @모음;
+    next;
+  }
 
   if    ($l =~ /^###\s+(.*)$/)      { push @blocks, block('heading_3', $1) }
   elsif ($l =~ /^##\s+(.*)$/)       { push @blocks, block('heading_2', $1) }
@@ -97,7 +162,6 @@ while (my $l = <$F>) {
   elsif ($l =~ /^\s*\d+[.)]\s+(.*)$/) { push @blocks, block('numbered_list_item', $1) }
   else                              { push @blocks, block('paragraph', $l) }
 }
-close $F;
 
 die "변환할 내용이 없습니다.\n" unless @blocks;
 print '[', join(",\n", @blocks), ']';
@@ -117,7 +181,12 @@ ENVFILE="연동/.env"
 [[ -f "$ENVFILE" ]] || { echo "오류: $ENVFILE 이 없습니다." >&2; exit 1; }
 
 TOKEN="$(grep -m1 '^노션_토큰=' "$ENVFILE" | cut -d= -f2- || true)"
-PARENT="$(grep -m1 '^노션_상위페이지=' "$ENVFILE" | cut -d= -f2- || true)"
+# 기획형과 체험단을 한 페이지에 섞지 않는다. 종류에 따라 상위 페이지가 다르다.
+if [[ "$KIND" == "체험단" ]]; then
+  PARENT="$(grep -m1 '^노션_체험단페이지=' "$ENVFILE" | cut -d= -f2- || true)"
+else
+  PARENT="$(grep -m1 '^노션_상위페이지=' "$ENVFILE" | cut -d= -f2- || true)"
+fi
 
 if [[ -z "${TOKEN:-}" || -z "${PARENT:-}" ]]; then
   echo "오류: $ENVFILE 에 아래 두 줄이 필요합니다." >&2
@@ -238,20 +307,33 @@ echo "  $PAGEURL"
 # 웹앱이 설정돼 있지 않으면 조용히 넘어간다 (노션 업로드 자체는 이미 끝났다).
 WEBAPP="$(grep -m1 '^공고가이드_웹앱=' "$ENVFILE" | cut -d= -f2- || true)"
 KEY2="$(grep -m1 '^공고가이드_비밀키=' "$ENVFILE" | cut -d= -f2- || true)"
+if [[ "$REC" == "기록없음" ]]; then
+  echo "  (시트 기록은 건너뜁니다)"
+  WEBAPP=""
+fi
 if [[ -n "${WEBAPP:-}" && -n "${KEY2:-}" ]]; then
   # 제목 앞의 날짜를 떼어 브랜드명만 남긴다. 이력은 브랜드명으로 짝을 맞춘다.
   BRAND="$(printf '%s' "$TITLE" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} //')"
+  # 제목에서 채널을 뽑아내고 브랜드명만 남긴다.
+  # 이력은 (종류, 채널, 브랜드) 로 쌓인다. 체험단은 채널마다 공고가 따로다.
+  CH=""
+  case "$TITLE" in
+    *블로그*) CH="블로그" ;;
+    *인스타*|*피드*) CH="피드" ;;
+    *릴스*)   CH="릴스" ;;
+  esac
+  BRAND="$(printf '%s' "$BRAND" | sed -E 's/ *\((블로그|피드|릴스)\) *$//; s/ *(블로그|인스타|릴스) ?체험단 *$//')"
   cat > "$TMP/rec.pl" <<'PERLEOF'
 use strict; use warnings;
-my ($key, $brand, $url, $out) = @ARGV;
+my ($key, $kind, $ch, $brand, $url, $out) = @ARGV;
 $key =~ s/[^A-Za-z0-9_-]//g;
-for ($brand, $url) { s/"/\\"/g }
+for ($kind, $ch, $brand, $url) { s/"/\\"/g }
 open(my $O, '>:raw', $out) or die $!;
-print $O '{"비밀키":"' . $key . '","동작":"공고기록","브랜드":"' . $brand
-       . '","링크":"' . $url . '"}';
+print $O '{"비밀키":"' . $key . '","동작":"공고기록","종류":"' . $kind
+       . '","채널":"' . $ch . '","브랜드":"' . $brand . '","링크":"' . $url . '"}';
 close $O;
 PERLEOF
-  perl "$TMP/rec.pl" "$KEY2" "$BRAND" "$PAGEURL" "$TMP/rec.json"
+  perl "$TMP/rec.pl" "$KEY2" "$KIND" "$CH" "$BRAND" "$PAGEURL" "$TMP/rec.json"
   RC2=$(curl -sS -L --max-time 120 -H 'Content-Type: application/json' \
         --data-binary "@$TMP/rec.json" -o "$TMP/rec_res.json" -w '%{http_code}' "$WEBAPP" || echo 000)
   if [[ "$RC2" == "200" ]] && grep -q '"성공":true' "$TMP/rec_res.json"; then
