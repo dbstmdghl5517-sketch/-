@@ -103,6 +103,113 @@ function doPost(e) {
       return 응답(시트읽기(본문.시트, 본문.탭, 본문.최대));
     }
 
+    // 매시간 점검을 지금 돌린다.
+    if (본문.동작 === '점검') {
+      if (typeof 점검 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(점검());
+    }
+
+    // 트리거 설치·정리. 웹앱에서 직접 걸 수 있다는 것을 확인하고 열었다.
+    // 전에는 사용자가 편집기에서 눌러야 했다.
+    if (본문.동작 === '트리거정리') {
+      var 원함 = {
+        '점검':     { 종류: '시간', 매시간: 1 },
+        '전체갱신': { 종류: '시간', 매시간: 1 },
+        '상태정리': { 종류: '매일', 시각: 6 }
+      };
+      if (typeof 단계3_시트에적재 === 'function') 원함['단계3_시트에적재'] = { 종류: '시간', 매시간: 1 };
+
+      var 있음 = {};
+      ScriptApp.getProjectTriggers().forEach(function (t) {
+        var f = t.getHandlerFunction();
+        있음[f] = (있음[f] || 0) + 1;
+      });
+
+      var 만듦 = [], 이미 = [];
+      for (var f in 원함) {
+        if (있음[f]) { 이미.push(f + ' ×' + 있음[f]); continue; }
+        var spec = 원함[f];
+        if (spec.종류 === '시간') ScriptApp.newTrigger(f).timeBased().everyHours(spec.매시간).create();
+        else                      ScriptApp.newTrigger(f).timeBased().everyDays(1).atHour(spec.시각).create();
+        만듦.push(f);
+      }
+      return 응답({ 성공: true, 만듦: 만듦, 이미있음: 이미 });
+    }
+
+    // 시험 — 로그인 없이 토큰을 받을 수 있는 방식이 있는지 두드려 본다.
+    if (본문.동작 === '아임웹토큰시도') {
+      var pp = PropertiesService.getScriptProperties();
+      var 결과 = [];
+      ['client_credentials', 'clientCredentials'].forEach(function (g) {
+        try {
+          var r = UrlFetchApp.fetch('https://openapi.imweb.me/oauth2/token', {
+            method: 'post', contentType: 'application/x-www-form-urlencoded',
+            payload: { grantType: g,
+                       clientId: pp.getProperty('IMWEB_CLIENT_ID'),
+                       clientSecret: pp.getProperty('IMWEB_CLIENT_SECRET') },
+            muteHttpExceptions: true
+          });
+          결과.push({ 방식: g, 코드: r.getResponseCode(),
+                      응답: r.getContentText().substring(0, 200) });
+        } catch (e) { 결과.push({ 방식: g, 오류: String(e) }); }
+      });
+      return 응답({ 성공: true, 시도: 결과 });
+    }
+
+    // 시험 — 웹앱에서 트리거를 직접 걸 수 있는지 확인한다.
+    if (본문.동작 === '트리거시험') {
+      try {
+        var t = ScriptApp.newTrigger('전체갱신').timeBased().everyHours(6).create();
+        var id = t.getUniqueId();
+        ScriptApp.getProjectTriggers().forEach(function (x) {
+          if (x.getUniqueId() === id) ScriptApp.deleteTrigger(x);   // 바로 치운다. 시험일 뿐이다
+        });
+        return 응답({ 성공: true, 결과: '웹앱에서 트리거를 걸 수 있습니다.' });
+      } catch (e) {
+        return 응답({ 성공: false, 오류: String(e) });
+      }
+    }
+
+    // 아임웹 문의 적재를 지금 돌리고, 막히면 어디서 막히는지 그대로 돌려준다.
+    // ★ 「안 들어왔다」를 추측으로 답하지 않기 위해 만든 것이다.
+    if (본문.동작 === '아임웹점검') {
+      var p = PropertiesService.getScriptProperties();
+      // ★ 값이 「있는지」만 보면 안 된다. 자리표시자(`여기에_…`)가 저장돼 있어도
+      //   있는 것으로 보여 진짜 원인을 놓친다. 실제로 그렇게 헛다리를 짚었다.
+      var 값보기 = function (k) {
+        var v = p.getProperty(k);
+        if (!v) return '(없음)';
+        if (v.indexOf('여기에') === 0) return '❗자리표시자 그대로: ' + v;
+        return '설정됨 (' + v.length + '자, 앞 4자 ' + v.substring(0, 4) + '…)';
+      };
+      var 진단 = {
+        함수있음:      (typeof 단계3_시트에적재 === 'function'),
+        CLIENT_ID:     값보기('IMWEB_CLIENT_ID'),
+        CLIENT_SECRET: 값보기('IMWEB_CLIENT_SECRET'),
+        리프레시토큰:   값보기('IMWEB_REFRESH_TOKEN')
+      };
+      if (!진단.함수있음) {
+        return 응답({ 성공: false, 오류: '단계3_시트에적재 함수가 프로젝트에 없습니다.', 진단: 진단 });
+      }
+      if (본문.실행 !== true) return 응답({ 성공: true, 진단: 진단, 안내: '실행:true 로 보내면 실제로 돌립니다.' });
+      try {
+        단계3_시트에적재();
+        return 응답({ 성공: true, 진단: 진단, 결과: '실행 완료' });
+      } catch (e) {
+        return 응답({ 성공: false, 진단: 진단, 오류: String(e) });
+      }
+    }
+
+    // 견적서 한 건 기록. PDF 를 드라이브에 올리고 견적 이력·광고주 관리에 쓴다.
+    if (본문.동작 === '견적기록') {
+      if (typeof 견적기록 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(견적기록(본문.견적 || {}));
+    }
+
     // 1시간 주기 갱신을 지금 돌린다. 폼 응답 미러 + 문의 탭 반영.
     if (본문.동작 === '전체갱신') {
       if (typeof 응답미러 !== 'function') {

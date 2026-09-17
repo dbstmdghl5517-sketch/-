@@ -57,7 +57,16 @@ var 응답탭명 = '기획형 응답';   // 시트에 실제로 있는 탭 이�
 var 진행행 = ['5-0 브랜드명',
               '5-1 가이드', '6 공고', '보완 필요',
               '3-1 가이드', '4 공고', '3-1 보완 필요',
+              '견적금액', '견적서',
               '진행 갱신'];
+
+// ── 견적 이력 ─────────────────────────────────────────────
+// 견적서는 파일로만 남고 시트에 아무 기록이 없었다. 공고와 달리 연동이 없었다.
+// 업체·금액·PDF 를 한곳에 쌓아 두면 나중에 「얼마에 보냈더라」를 찾을 수 있다.
+var 견적탭명 = '견적 이력';
+var 견적머리글 = ['견적일', '업체명', '브랜드', '견적명', '품명', '수량', '단가',
+                  '공급가액', '세액', '견적금액(VAT포함)', '견적서', '갱신'];
+var 견적폴더명 = '견적서';
 
 // 종류별 행 이름. 이력의 어느 칸을 어느 행에 쓸지 정한다.
 var 종류행 = {
@@ -341,6 +350,232 @@ function 이력읽기() {
     묶음[k].push(o);
   }
   return { 낱개: 낱개, 묶음: 묶음 };
+}
+
+// ═══════════════════════════════════════════════════════════
+// 매시간 점검 — 조용히 멈춘 자동화를 찾아낸다
+// ═══════════════════════════════════════════════════════════
+//
+// ★ 왜 만들었나
+//   아임웹 문의 적재가 멈췄는데 아무도 몰랐다. 트리거는 1시간마다 성실히 돌았지만
+//   함수가 없어 실패했고, 그 사실이 어디에도 안 남았다.
+//   사용자가 「문의 두 건이 왜 안 들어왔냐」고 물어서야 알았다.
+//
+//   전에 쓰던 `업데이트` 보고는 **트리거가 걸려 있는지만** 셌다.
+//   걸려 있는 것과 잘 도는 것은 다르다. 이제 실제로 돌려 보고 판단한다.
+//
+// ★ 알림은 상태가 바뀔 때만 보낸다.
+//   매시간 같은 실패를 보내면 곧 안 읽게 된다. 처음 실패할 때 한 번,
+//   그리고 복구됐을 때 한 번 보낸다.
+
+var 점검상태_속성 = '점검_직전상태';
+
+function 점검항목() {
+  return [
+    {
+      이름: '아임웹 문의 적재',
+      설명: '홈페이지 문의를 광고주 관리 시트로 가져온다',
+      확인: function () {
+        if (typeof 단계3_시트에적재 !== 'function') {
+          return { 정상: false, 사유: '단계3_시트에적재 함수가 프로젝트에 없습니다' };
+        }
+        if (typeof 토큰 !== 'function') return { 정상: false, 사유: '토큰 함수가 없습니다' };
+
+        // ★ 값이 「있는지」가 아니라 「뭔지」를 본다.
+        //   자리표시자가 저장돼 있어도 있는 것으로 보여 원인을 놓친 적이 있다.
+        var pp = PropertiesService.getScriptProperties();
+        var 빈것 = [];
+        ['IMWEB_CLIENT_ID', 'IMWEB_CLIENT_SECRET', 'IMWEB_REFRESH_TOKEN'].forEach(function (k) {
+          var v = pp.getProperty(k) || '';
+          if (!v) 빈것.push(k + ' 없음');
+          else if (v.indexOf('여기에') === 0) 빈것.push(k + ' 가 자리표시자입니다');
+        });
+        if (빈것.length) return { 정상: false, 사유: 빈것.join(' / ') };
+
+        토큰();                                   // 실제로 갱신되는지 본다
+        return { 정상: true };
+      },
+      조치: 'Client ID·Secret 이 자리표시자면 실제 값을 넣으세요(아임웹 개발자센터).'
+          + ' 토큰이 만료됐으면 [단계1_승인링크] 실행 → 아임웹 로그인·승인 →'
+          + ' 돌아온 주소의 code 값을 담당자에게 전달하세요.'
+    },
+    {
+      이름: '폼 응답 미러',
+      설명: '기획형 인플루언서 폼 응답을 시트로 복사한다',
+      확인: function () {
+        if (typeof 폼목록 === 'undefined') return { 정상: false, 사유: '자동알림.gs 가 없습니다' };
+        for (var i = 0; i < 폼목록.length; i++) 시트(폼목록[i]).getLastRow();
+        return { 정상: true };
+      },
+      조치: '폼 시트를 열 수 없습니다. 시트 ID·탭 gid 를 확인하세요.'
+    },
+    {
+      이름: '폼 제출 트리거',
+      설명: '새 접수가 들어오면 초안·메일을 만든다',
+      확인: function () {
+        var n = 0;
+        ScriptApp.getProjectTriggers().forEach(function (t) {
+          if (t.getHandlerFunction() === '새응답처리') n++;
+        });
+        var 필요 = (typeof 폼목록 !== 'undefined') ? 폼목록.length : 1;
+        if (n < 필요) return { 정상: false, 사유: '폼 ' + 필요 + '개인데 트리거가 ' + n + '개입니다' };
+        return { 정상: true };
+      },
+      조치: '[트리거설치] 를 실행하거나 담당자에게 알리세요.'
+    },
+    {
+      이름: '광고주 관리 시트',
+      설명: '업체 현황이 모이는 곳',
+      확인: function () {
+        var sh = 문의탭();
+        if (!행찾기(sh, '기업명(소속)')) return { 정상: false, 사유: '기업명(소속) 행이 없습니다' };
+        return { 정상: true };
+      },
+      조치: '[초기_진행행만들기] 를 실행하세요.'
+    }
+  ];
+}
+
+/** 매시간 도는 점검. 상태가 바뀐 항목만 메일로 알린다. */
+function 점검() {
+  var 항목들 = 점검항목();
+  var 지금 = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+  var 결과 = [], 나쁨 = {};
+
+  항목들.forEach(function (it) {
+    var r;
+    try { r = it.확인(); }
+    catch (e) { r = { 정상: false, 사유: String(e).replace(/^Error:\s*/, '') }; }
+    r.이름 = it.이름; r.조치 = it.조치; r.설명 = it.설명;
+    결과.push(r);
+    if (!r.정상) 나쁨[it.이름] = r.사유;
+  });
+
+  var p = PropertiesService.getScriptProperties();
+  var 직전 = {};
+  try { 직전 = JSON.parse(p.getProperty(점검상태_속성) || '{}'); } catch (e) {}
+
+  // 새로 고장난 것 / 새로 고쳐진 것만 추린다
+  var 새고장 = [], 복구 = [];
+  결과.forEach(function (r) {
+    var 전에나빴나 = !!직전[r.이름];
+    if (!r.정상 && !전에나빴나) 새고장.push(r);
+    if (r.정상 && 전에나빴나)  복구.push(r);
+  });
+
+  p.setProperty(점검상태_속성, JSON.stringify(나쁨));
+  p.setProperty('점검_마지막시각', 지금);
+
+  if (새고장.length || 복구.length) 점검메일(새고장, 복구, 결과, 지금);
+
+  결과.forEach(function (r) { Logger.log((r.정상 ? '정상 ' : '❗실패 ') + r.이름 + (r.사유 ? ' — ' + r.사유 : '')); });
+  return { 성공: true, 시각: 지금, 결과: 결과, 새고장: 새고장.length, 복구: 복구.length };
+}
+
+function 점검메일(새고장, 복구, 전체, 지금) {
+  var 주소 = PropertiesService.getScriptProperties().getProperty('알림주소');
+  if (!주소) { Logger.log('알림주소가 없어 메일을 못 보냅니다.'); return; }
+
+  var 제목 = 새고장.length
+    ? '[포포몬비즈] ❗자동화 멈춤 — ' + 새고장.map(function (r) { return r.이름; }).join(', ')
+    : '[포포몬비즈] ✅자동화 복구 — ' + 복구.map(function (r) { return r.이름; }).join(', ');
+
+  var 줄 = ['점검 시각 : ' + 지금, ''];
+  if (새고장.length) {
+    줄.push('■ 멈춘 것');
+    새고장.forEach(function (r) {
+      줄.push('   · ' + r.이름 + ' — ' + r.설명);
+      줄.push('     원인 : ' + r.사유);
+      줄.push('     조치 : ' + r.조치);
+      줄.push('');
+    });
+  }
+  if (복구.length) {
+    줄.push('■ 다시 도는 것');
+    복구.forEach(function (r) { 줄.push('   · ' + r.이름); });
+    줄.push('');
+  }
+  줄.push('■ 전체 상태');
+  전체.forEach(function (r) { 줄.push('   ' + (r.정상 ? '정상  ' : '❗실패 ') + r.이름); });
+  줄.push('');
+  줄.push('※ 같은 고장으로 매시간 보내지 않습니다. 상태가 바뀔 때만 옵니다.');
+
+  try { MailApp.sendEmail({ to: 주소, subject: 제목, body: 줄.join('\n') }); }
+  catch (e) { Logger.log('점검 메일 실패: ' + e); }
+}
+
+/**
+ * 견적서 한 건을 기록한다.
+ *   1) PDF 를 드라이브 `견적서` 폴더에 올린다 (시트에서 바로 열린다)
+ *   2) `견적 이력` 탭에 한 줄 쌓는다 — 같은 (업체, 견적명) 이면 그 줄을 갱신
+ *   3) `광고주 관리` 탭의 업체 열에 견적금액·견적서 링크를 넣는다
+ *
+ * ★ 업체명과 브랜드명은 다르다.
+ *   광고주 관리 열은 **업체명**으로 찾는다 (예: 프라임매니지먼트).
+ *   브랜드명(예: 트레블로지 스위트 부산 센텀)으로 찾으면 열을 못 찾는다.
+ *
+ * 인자: { 견적일, 업체명, 브랜드, 견적명, 품명, 수량, 단가,
+ *         공급가액, 세액, 견적금액, 파일명, pdf(base64) }
+ */
+function 견적기록(d) {
+  d = d || {};
+  var 업체 = String(d.업체명 || '').trim();
+  if (업체 === '') return { 성공: false, 오류: '업체명이 비어 있습니다.' };
+
+  // 1) PDF 업로드 — 같은 이름이 있으면 휴지통으로 보내고 새로 올린다
+  var 링크 = '';
+  if (d.pdf && d.파일명) {
+    try {
+      var 폴더 = 폴더확보(견적폴더명);
+      var it = 폴더.getFilesByName(d.파일명);
+      while (it.hasNext()) it.next().setTrashed(true);
+      var blob = Utilities.newBlob(Utilities.base64Decode(d.pdf),
+                                   'application/pdf', d.파일명);
+      링크 = 폴더.createFile(blob).getUrl();
+    } catch (e) { Logger.log('PDF 업로드 실패: ' + e); }
+  }
+
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+  var 지금 = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+
+  // 2) 견적 이력 탭
+  var sh = 탭확보(ss, 견적탭명);
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, 견적머리글.length).setValues([견적머리글])
+      .setFontWeight('bold').setBackground('#F2F4F8');
+    sh.setFrozenRows(1);
+    [12, 18, 24, 30, 34, 7, 12, 14, 12, 16, 30, 16]
+      .forEach(function (w, i) { sh.setColumnWidth(i + 1, w * 8); });
+  }
+  var 줄 = [d.견적일 || 지금.slice(0, 10), 업체, d.브랜드 || '', d.견적명 || '',
+            d.품명 || '', d.수량 || '', d.단가 || '', d.공급가액 || '',
+            d.세액 || '', d.견적금액 || '', 링크, 지금];
+
+  // 같은 (업체, 견적명) 이면 덮어쓴다. 다시 뽑을 때마다 줄이 쌓이면 안 된다.
+  var 행 = 0;
+  if (sh.getLastRow() > 1) {
+    var 기존 = sh.getRange(2, 2, sh.getLastRow() - 1, 3).getValues();
+    for (var i = 0; i < 기존.length; i++) {
+      if (String(기존[i][0]).trim() === 업체 &&
+          String(기존[i][2]).trim() === String(d.견적명 || '').trim()) { 행 = i + 2; break; }
+    }
+  }
+  if (!행) 행 = sh.getLastRow() + 1;
+  sh.getRange(행, 1, 1, 줄.length).setValues([줄]);
+
+  // 3) 광고주 관리 탭 — 업체 열에 금액과 링크
+  // 열 번호를 주면 그 열에 쓴다. 시트 기업명과 실제 상호가 다를 때 쓴다.
+  var 반영 = [];
+  try {
+    var 칸 = d.열 ? { 열: d.열 } : { 기업명: 업체 };
+    var r1 = 칸쓰기('견적금액', [{ 기업명: 칸.기업명, 열: 칸.열, 값: d.견적금액 || '' }]);
+    var r2 = 칸쓰기('견적서',   [{ 기업명: 칸.기업명, 열: 칸.열, 값: 링크 }]);
+    반영 = (r1.쓴것 || []).concat(r2.쓴것 || []);
+    if ((r1.건너뜀 || []).length) 반영.push('건너뜀: ' + r1.건너뜀.join(', '));
+  } catch (e) { Logger.log('광고주 관리 반영 실패: ' + e); }
+
+  Logger.log('견적 기록: ' + 업체 + ' / ' + (d.견적명 || '') + ' / ' + (d.견적금액 || ''));
+  return { 성공: true, 탭: 견적탭명, 행: 행, 링크: 링크, 광고주관리: 반영 };
 }
 
 /**
@@ -790,7 +1025,20 @@ function 칸쓰기(행라벨, 항목) {
   항목.forEach(function (it) {
     var 이름 = String(it.기업명 || '').trim();
     var 값   = String(it.값 || '').trim();
-    if (이름 === '' || 값 === '') return;
+    if (값 === '') return;
+
+    // ★ 열 번호를 직접 준 경우. 기업명이 여러 열에 겹치거나
+    //   시트에 적힌 이름과 실제 상호가 다를 때 쓴다.
+    //   (견적서는 「프라임매니지먼트」인데 시트 기업명은 「호텔스토리(프라임)」이었다)
+    if (it.열) {
+      var c0 = Number(it.열);
+      if (!(c0 >= 2 && c0 <= 끝열)) { 건너뜀.push('열 ' + it.열 + ' — 범위를 벗어났습니다'); return; }
+      sh.getRange(대상행, c0).setValue(값).setWrap(true);
+      쓴것.push((첫줄(업체[c0 - 1]) || '이름없음') + ' (' + c0 + '열, 지정) → ' + 값);
+      return;
+    }
+
+    if (이름 === '') return;
     if (!횟수[이름])      { 건너뜀.push(이름 + ' — 기업명을 찾지 못했습니다'); return; }
     if (횟수[이름] > 1)   { 건너뜀.push(이름 + ' — ' + 횟수[이름] + '개 열에 있어 어느 열인지 알 수 없습니다'); return; }
     for (var c = 2; c <= 끝열; c++) {

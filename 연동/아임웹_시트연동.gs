@@ -72,12 +72,50 @@ var 행매핑 = [
 // 단계0 — 자격증명 저장 (한 번만)
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * 자격증명 저장.
+ *
+ * ★ 자리표시자를 그대로 저장할 수 없게 막아 뒀다.
+ *   전에 이 함수를 **값을 안 바꾼 채 실행**해서 진짜 Client ID·Secret 이
+ *   `여기에_Client_ID` 로 덮였다. 그 뒤로 아임웹 문의 적재가 계속 실패했는데,
+ *   토큰이 만료된 것으로 오해해 한참 헤맸다. (2026-09-17)
+ *
+ * ★ 이미 저장된 값이 멀쩡하면 덮어쓰지 않는다.
+ *   실수로 한 번 더 실행해도 연동이 끊기지 않게 한다.
+ */
 function 단계0_자격증명저장() {
-  PropertiesService.getScriptProperties().setProperties({
-    IMWEB_CLIENT_ID:     '여기에_Client_ID',
-    IMWEB_CLIENT_SECRET: '여기에_Client_Secret'
-  });
+  var ID     = '여기에_Client_ID';
+  var SECRET = '여기에_Client_Secret';
+
+  if (ID.indexOf('여기에') === 0 || SECRET.indexOf('여기에') === 0) {
+    Logger.log('❗저장하지 않았습니다. 함수 안의 ID/SECRET 을 실제 값으로 바꾸고 다시 실행하세요.\n'
+             + '   (자리표시자를 저장하면 연동이 끊깁니다. 전에 그렇게 끊긴 적이 있습니다.)');
+    return;
+  }
+
+  var p = PropertiesService.getScriptProperties();
+  var 기존 = p.getProperty('IMWEB_CLIENT_ID') || '';
+  if (기존 && 기존.indexOf('여기에') !== 0 && 기존 !== ID) {
+    Logger.log('❗이미 다른 Client ID 가 저장돼 있습니다: ' + 기존.substring(0, 8) + '…\n'
+             + '   정말 바꾸려면 [단계0_자격증명_강제저장] 을 쓰세요.');
+    return;
+  }
+
+  p.setProperties({ IMWEB_CLIENT_ID: ID, IMWEB_CLIENT_SECRET: SECRET });
   Logger.log('저장 완료. 보안을 위해 위 문자열은 코드에서 지워도 됩니다.');
+}
+
+/** 자격증명을 정말로 바꿔야 할 때만 쓴다. 위 확인을 건너뛴다. */
+function 단계0_자격증명_강제저장() {
+  var ID     = '여기에_Client_ID';
+  var SECRET = '여기에_Client_Secret';
+  if (ID.indexOf('여기에') === 0 || SECRET.indexOf('여기에') === 0) {
+    Logger.log('❗값을 먼저 채우세요.');
+    return;
+  }
+  PropertiesService.getScriptProperties()
+    .setProperties({ IMWEB_CLIENT_ID: ID, IMWEB_CLIENT_SECRET: SECRET });
+  Logger.log('강제 저장 완료.');
 }
 
 function 설정값(k) { return PropertiesService.getScriptProperties().getProperty(k) || ''; }
@@ -227,6 +265,7 @@ function 단계3_시트에적재() {
   var 기존기업 = 기존기업명(sh, 라벨);
 
   var 추가 = 0, 중복 = 0, 걸러짐 = 0;
+  var 신규 = [];                    // 메일로 알릴 새 문의
 
   응답들.forEach(function (r) {
     if (이미[String(r.submitNo)]) { 중복++; return; }
@@ -241,9 +280,54 @@ function 단계3_시트에적재() {
     이미[String(r.submitNo)] = true;
     if (이름) 기존기업[이름] = true;
     추가++;
+
+    신규.push({
+      기업:   String(r.f['회사/브랜드명'] || '(미기재)'),
+      담당:   String(r.f['담당자명'] || ''),
+      연락처: 전화형식(r.f['연락처'] || ''),
+      이메일: String(r.f['이메일'] || ''),
+      업종:   String(r.f['업종'] || ''),
+      예산:   String(r.f['예상 예산'] || ''),
+      문의:   String(r.f['문의내용'] || ''),
+      열:     col
+    });
   });
 
   Logger.log('전체 ' + 응답들.length + '건 → 추가 ' + 추가 + ' / 이미있음 ' + 중복 + ' / 제외 ' + 걸러짐);
+
+  // ★ 새로 들어온 문의는 메일로 알린다.
+  //   전에는 시트에만 쌓여서, 문의가 온 줄 모르고 지나가는 일이 있었다.
+  //   5-0 폼 접수만 메일이 가고 아임웹은 조용했다.
+  if (신규.length) 아임웹_신규알림(신규);
+}
+
+/** 새로 들어온 홈페이지 문의를 메일로 알린다. */
+function 아임웹_신규알림(신규) {
+  var 주소 = PropertiesService.getScriptProperties().getProperty('알림주소');
+  if (!주소) { Logger.log('알림주소가 없어 메일을 못 보냅니다.'); return; }
+
+  var 제목 = '[포포몬비즈] 홈페이지 문의 ' + 신규.length + '건 — '
+           + 신규.map(function (n) { return n.기업; }).join(', ');
+
+  var 줄 = ['홈페이지(아임웹)로 새 문의가 들어왔습니다.', ''];
+  신규.forEach(function (n, i) {
+    줄.push((i + 1) + '. ' + n.기업);
+    줄.push('   담당자 : ' + (n.담당 || '(미기재)'));
+    줄.push('   연락처 : ' + (n.연락처 || '(미기재)'));
+    줄.push('   이메일 : ' + (n.이메일 || '(미기재)'));
+    if (n.업종)   줄.push('   업종   : ' + n.업종);
+    if (n.예산)   줄.push('   예산   : ' + n.예산);
+    if (n.문의)   줄.push('   문의   : ' + String(n.문의).replace(/\n/g, ' / ').substring(0, 200));
+    줄.push('   시트   : ' + n.열 + '열');
+    줄.push('');
+  });
+  줄.push('광고주 관리 시트');
+  줄.push('https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID + '/edit#gid=' + TARGET_GID);
+  줄.push('');
+  줄.push('※ 진행상태는 ' + 기본_진행상태 + ' 로 들어갑니다.');
+
+  try { MailApp.sendEmail({ to: 주소, subject: 제목, body: 줄.join('\n') }); Logger.log('신규 문의 메일 발송: ' + 주소); }
+  catch (e) { Logger.log('메일 실패: ' + e); }
 }
 
 /** 아임웹 폼 제출 목록. 날짜 필터는 API 가 직접 지원한다. */
@@ -385,7 +469,7 @@ function 기존기업명(sh, 라벨) {
 // 트리거
 // ═══════════════════════════════════════════════════════════
 
-function 트리거설치() {
+function 아임웹_트리거설치() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === '단계3_시트에적재') ScriptApp.deleteTrigger(t);
   });
@@ -393,7 +477,7 @@ function 트리거설치() {
   Logger.log('1시간마다 자동 적재 트리거를 설치했습니다.');
 }
 
-function 트리거삭제() {
+function 아임웹_트리거삭제() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   Logger.log('모든 트리거를 삭제했습니다.');
 }
