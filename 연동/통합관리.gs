@@ -46,7 +46,7 @@ var 통합시트_ID = '14n42XJQ0QzTqzeFkaAHua-SMVQVtJjRQ5OQcpQ9ssl4';
 var 문의탭_GID  = 928374615;
 
 var 이력탭명 = '발행 이력';
-var 응답탭명 = '5-0 응답';
+var 응답탭명 = '기획형 응답';   // 시트에 실제로 있는 탭 이름. 바꾸면 여기도 같이 고친다
 
 // 문의 탭 맨 아래에 덧붙일 행. 순서대로 만든다.
 //
@@ -161,18 +161,73 @@ function 전체갱신() {
   Logger.log(SpreadsheetApp.openById(통합시트_ID).getUrl());
 }
 
-/** 5-0 응답 시트를 통합 워크북의 탭으로 그대로 복사한다. */
-function 응답미러() {
-  var 원본 = SpreadsheetApp.openById(응답시트_ID).getSheets()[0];
-  var 값 = 원본.getDataRange().getValues();
-  var sh = 탭확보(SpreadsheetApp.openById(통합시트_ID), 응답탭명);
+/**
+ * 5-0 응답 시트를 통합 워크북의 탭으로 그대로 복사한다.
+ *
+ * ★ 폼이 여러 개다. 자동알림.gs 의 폼목록 을 그대로 따라간다.
+ *   전에는 19문항 폼 하나만 복사해서, 16문항 폼으로 들어온 접수가
+ *   광고주 관리 시트에 아예 나타나지 않았다.
+ *   폼목록 에 폼을 추가하면 여기도 자동으로 따라온다. 두 곳을 따로 고치지 않는다.
+ */
+// 합친 응답 탭의 열 순서. 두 폼의 문항을 하나로 모은 것이다.
+var 응답열 = ['접수일', '폼', '브랜드명', '담당자', '링크', '홍보제품', '제공혜택',
+              '진행방식', '브랜드소개', '강조포인트', '캠페인목적', '콘텐츠스타일',
+              '분위기', '필수장면', '게시글필수항목', '사람태그', '레퍼런스링크',
+              '일정', '업로드시점', '금지사항', '2차활용',
+              '영상길이', '콘텐츠제출일', '인사이트기한', '필수해시태그'];
 
-  sh.clear();
-  if (!값.length) return 0;
-  sh.getRange(1, 1, 값.length, 값[0].length).setValues(값);
-  sh.getRange(1, 1, 1, 값[0].length).setFontWeight('bold').setBackground('#F2F4F8');
-  sh.setFrozenRows(1);
-  return 값.length;
+function 응답미러() {
+  if (typeof 폼목록 === 'undefined') {
+    Logger.log('자동알림.gs 가 프로젝트에 없습니다. 폼목록 을 찾을 수 없습니다.');
+    return 0;
+  }
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+
+  // ★ 폼이 달라도 **한 탭에 모은다.**
+  //   전에는 폼마다 탭을 따로 만들었다. 그러면 새 폼으로 들어온 업체가
+  //   늘 보던 탭에 안 나타나 «없다»고 보인다. 실제로 인디언이 그렇게 묻혔다.
+  //   문항 수가 달라 열을 그대로는 못 붙이므로, 항목 이름으로 맞춰 넣는다.
+  //   그 폼에 없는 문항은 빈 칸으로 둔다.
+  var 줄들 = [];
+  폼목록.forEach(function (폼) {
+    var sh;
+    try { sh = 시트(폼); } catch (e) { Logger.log(폼.이름 + ': ' + e); return; }
+    var 끝 = sh.getLastRow();
+    if (끝 < 2) return;
+    var 머리글 = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var 값 = sh.getRange(2, 1, 끝 - 1, sh.getLastColumn()).getValues();
+
+    값.forEach(function (행) {
+      var 브랜드 = 칸읽기(행, 머리글, 폼.항목.브랜드명);
+      if (브랜드 === '') return;
+      var 줄 = 응답열.map(function (k) {
+        if (k === '폼') return 폼.이름;
+        // 접수일은 날짜 값 그대로 넘겨야 한다. 글자로 바꾸면 시:분을 월·일로 읽는다.
+        if (k === '접수일') return 날짜문자(칸원본(행, 머리글, 폼.항목.타임스탬프));
+        return 칸읽기(행, 머리글, 폼.항목[k]);
+      });
+      줄들.push(줄);
+    });
+  });
+
+  var sh2 = 탭확보(ss, 응답탭명);
+  sh2.clear();
+  sh2.getRange(1, 1, 1, 응답열.length).setValues([응답열])
+     .setFontWeight('bold').setBackground('#F2F4F8');
+  if (줄들.length) {
+    sh2.getRange(2, 1, 줄들.length, 응답열.length).setValues(줄들);
+  }
+  sh2.setFrozenRows(1);
+  sh2.setFrozenColumns(3);
+
+  // 폼마다 따로 만들었던 옛 탭은 치운다. 두 군데를 보면 헷갈린다.
+  폼목록.forEach(function (폼) {
+    var 옛 = ss.getSheetByName(응답탭명 + ' (' + 폼.이름 + ')');
+    if (옛) { ss.deleteSheet(옛); Logger.log('  옛 탭 삭제: ' + 옛.getName()); }
+  });
+
+  Logger.log('  ' + 응답탭명 + ': ' + 줄들.length + '건 (폼 ' + 폼목록.length + '개 합침)');
+  return 줄들.length;
 }
 
 /**
@@ -287,6 +342,51 @@ function 이력읽기() {
   }
   return { 낱개: 낱개, 묶음: 묶음 };
 }
+
+/**
+ * 발행 이력에서 잘못 쌓인 줄을 지운다.
+ *
+ * ★ 왜 필요한가
+ *   도구 쪽 변수 이름이 겹쳐 종류가 `page` 로 기록되고, 제목의 이모지를 못 떼어
+ *   브랜드명에 「🎬 2026-09-16 …」 이 통째로 들어간 줄이 쌓였다.
+ *   도구는 고쳤지만 이미 쌓인 줄은 사람이 지워야 해서 여기에 둔다.
+ *
+ * ★ 지우는 기준 (둘 중 하나라도 걸리면 잘못된 줄)
+ *   · 종류가 기획형·체험단 이 아니다
+ *   · 브랜드명이 날짜로 시작한다
+ *
+ * ★ 지우는 것은 되돌리기 어렵다. 먼저 미리보기로 확인한다.
+ */
+function 이력정리(미리보기) {
+  var sh = 탭확보(SpreadsheetApp.openById(통합시트_ID), 이력탭명);
+  var 끝 = sh.getLastRow();
+  if (끝 < 2) return { 성공: true, 지움: [], 남음: 0 };
+
+  var 값 = sh.getRange(2, 1, 끝 - 1, 3).getValues();
+  var 지울행 = [], 지움 = [];
+
+  for (var i = 0; i < 값.length; i++) {
+    var 종류 = String(값[i][0] || '').trim();
+    var 브랜드 = String(값[i][2] || '').trim();
+    var 나쁨 = (종류 !== '기획형' && 종류 !== '체험단') ||
+               /^\s*\d{4}-\d{2}-\d{2}/.test(브랜드);
+    if (!나쁨) continue;
+    지울행.push(i + 2);
+    지움.push('행 ' + (i + 2) + ' · ' + 종류 + ' · ' + 브랜드);
+  }
+
+  // 아래쪽부터 지운다. 위부터 지우면 행 번호가 밀려 엉뚱한 줄이 지워진다.
+  if (!미리보기) {
+    for (var j = 지울행.length - 1; j >= 0; j--) sh.deleteRow(지울행[j]);
+  }
+
+  Logger.log((미리보기 ? '[미리보기] ' : '') + '잘못된 줄 ' + 지움.length + '개');
+  지움.forEach(function (s) { Logger.log('  🗑 ' + s); });
+  return { 성공: true, 미리보기: !!미리보기, 지움: 지움,
+           남음: Math.max(0, sh.getLastRow() - 1) };
+}
+
+function 이력정리_미리보기() { return 이력정리(true); }
 
 /**
  * 발행 이력에 한 줄 기록(있으면 갱신).
@@ -1031,10 +1131,17 @@ function 현황요약() {
     요약[n + '탭'] = t ? Math.max(0, t.getLastColumn() - 1) : 0;
   });
 
-  // 5) 신규 접수 (5-0 응답 탭 행 수)
+  // 5) 신규 접수 — 폼이 여러 개다. 탭을 전부 더한다.
+  //    한 폼만 세면 다른 폼 접수가 보고에서 통째로 빠진다.
   try {
-    var 응답 = ss.getSheetByName(응답탭명);
-    요약['5-0응답'] = 응답 ? Math.max(0, 응답.getLastRow() - 1) : 0;
+    var 합 = 0;
+    ss.getSheets().forEach(function (t) {
+      var n = t.getName();
+      if (n === 응답탭명 || n.indexOf(응답탭명 + ' (') === 0) {
+        합 += Math.max(0, t.getLastRow() - 1);
+      }
+    });
+    요약['5-0응답'] = 합;
   } catch (e) {}
 
   // 6) 트리거

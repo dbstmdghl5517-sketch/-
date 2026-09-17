@@ -42,7 +42,10 @@
 # 4. 통합을 페이지에 연결하지 않으면 object_not_found. 토큰 문제로 착각하기 쉽다.
 # 5. children 은 한 번에 100개까지다. 넘으면 나눠 append 해야 한다 (아래에서 처리).
 # 6. Notion-Version 헤더가 없으면 400 이다.
-# 7. 토큰은 암호다. 저장소가 공개이므로 .env 를 커밋하면 안 된다.
+# 7. **KIND 를 두 뜻으로 쓰지 않는다.** 전에 상위 페이지 종류(page/database)를 같은
+#    KIND 에 담아 덮어써서, 발행 이력에 종류가 `page` 로 기록됐다. 이력이 어긋났다.
+#    상위 종류는 PARENTTYPE 이다.
+# 8. 토큰은 암호다. 저장소가 공개이므로 .env 를 커밋하면 안 된다.
 
 set -euo pipefail
 
@@ -204,10 +207,48 @@ AUTH="Authorization: Bearer $TOKEN"
 
 # ── 상위가 데이터베이스인지 일반 페이지인지 판별 ──
 # 틀리면 validation_error 가 나므로 먼저 확인한다.
-KIND=page
+# ── 같은 제목의 기존 페이지 치우기 ──
+# ★ 노션은 제목이 같아도 페이지를 계속 새로 만든다.
+#   내용을 고쳐 다시 올리면 **같은 공고가 두 벌, 세 벌 쌓인다.**
+#   인플루언서가 어느 것이 최신인지 알 수 없다. 그래서 먼저 보관 처리한다.
+#   (노션의 archived 는 휴지통행이다. 30일 안에는 되살릴 수 있다)
+if [[ "$MODE" == "올리기" ]]; then
+  OLDN=0
+  curl -sS -m 30 -H "$AUTH" -H "$NV" \
+    "$API/blocks/$PARENT/children?page_size=100" -o "$TMP/kids.json" || true
+  if [[ -s "$TMP/kids.json" ]]; then
+    cat > "$TMP/old.pl" <<'PERLEOF'
+use strict; use warnings;
+use utf8;
+use Encode qw(decode);
+use JSON::PP;
+binmode(STDOUT, ':encoding(UTF-8)');
+my ($file, $title) = @ARGV;
+$title = decode('UTF-8', $title);
+local $/;
+open(my $F, '<:raw', $file) or exit 0;
+my $raw = <$F>; close $F;
+my $d = eval { decode_json($raw) } or exit 0;
+for my $b (@{ $d->{results} || [] }) {
+  next unless ($b->{type} // '') eq 'child_page';
+  my $t = $b->{child_page}{title} // '';
+  print $b->{id}, "\n" if $t eq $title;
+}
+PERLEOF
+    while read -r OLDID; do
+      [[ -n "$OLDID" ]] || continue
+      curl -sS -m 30 -X PATCH -H "$AUTH" -H "$NV" -H 'Content-Type: application/json' \
+        --data '{"archived":true}' "$API/pages/$OLDID" -o /dev/null || true
+      OLDN=$((OLDN+1))
+    done < <(perl "$TMP/old.pl" "$TMP/kids.json" "$TITLE")
+  fi
+  [[ "$OLDN" -gt 0 ]] && echo "같은 제목의 기존 페이지 ${OLDN}개를 보관 처리했습니다."
+fi
+
+PARENTTYPE=page
 if curl -sS -m 30 -H "$AUTH" -H "$NV" "$API/databases/$PARENT" \
      | grep -q '"object":"database"'; then
-  KIND=database
+  PARENTTYPE=database
 elif ! curl -sS -m 30 -H "$AUTH" -H "$NV" "$API/pages/$PARENT" \
        | grep -q '"object":"page"'; then
   echo "오류: 상위 페이지를 찾을 수 없습니다." >&2
@@ -215,7 +256,7 @@ elif ! curl -sS -m 30 -H "$AUTH" -H "$NV" "$API/pages/$PARENT" \
   echo "  (토큰이 맞아도 연결하지 않으면 object_not_found 입니다)" >&2
   exit 1
 fi
-echo "상위: $KIND"
+echo "상위: $PARENTTYPE"
 
 # ── 페이지 만들기 (children 은 처음 100개만) ──
 cat > "$TMP/req.pl" <<'PERLEOF'
@@ -271,7 +312,7 @@ if (@rest) {
 }
 PERLEOF
 
-perl "$TMP/req.pl" "$TMP/blocks.json" "$TITLE" "$PARENT" "$KIND" "$TMP/create.json"
+perl "$TMP/req.pl" "$TMP/blocks.json" "$TITLE" "$PARENT" "$PARENTTYPE" "$TMP/create.json"
 
 CODE=$(curl -sS -m 90 -X POST "$API/pages" \
   -H "$AUTH" -H "$NV" -H 'Content-Type: application/json' \
@@ -312,17 +353,36 @@ if [[ "$REC" == "기록없음" ]]; then
   WEBAPP=""
 fi
 if [[ -n "${WEBAPP:-}" && -n "${KEY2:-}" ]]; then
-  # 제목 앞의 날짜를 떼어 브랜드명만 남긴다. 이력은 브랜드명으로 짝을 맞춘다.
-  BRAND="$(printf '%s' "$TITLE" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} //')"
-  # 제목에서 채널을 뽑아내고 브랜드명만 남긴다.
-  # 이력은 (종류, 채널, 브랜드) 로 쌓인다. 체험단은 채널마다 공고가 따로다.
-  CH=""
-  case "$TITLE" in
-    *블로그*) CH="블로그" ;;
-    *인스타*|*피드*) CH="피드" ;;
-    *릴스*)   CH="릴스" ;;
-  esac
-  BRAND="$(printf '%s' "$BRAND" | sed -E 's/ *\((블로그|피드|릴스)\) *$//; s/ *(블로그|인스타|릴스) ?체험단 *$//')"
+  # 제목 → 채널 + 브랜드명. 이력은 (종류, 채널, 브랜드) 로 짝을 맞춘다.
+  #
+  # ★ sed 를 쓰지 않는다. 이 환경의 sed 는 UTF-8 을 모른다.
+  #   제목 앞 이모지(🎬 📝 📷)를 지우려 하면 **한 글자를 바이트 단위로 잘라**
+  #   깨진 글자가 남는다. 그 상태로 기록되면 짝을 못 찾아 엉뚱한 줄이 새로 쌓인다.
+  #   실제로 릴스 4건이 그렇게 쌓였다. 반드시 perl -CSD + use utf8 로 다룬다.
+  cat > "$TMP/brand.pl" <<'PERLEOF'
+use strict; use warnings;
+use utf8;
+binmode(STDOUT, ':encoding(UTF-8)');
+my $t = decode_utf8_arg($ARGV[0]);
+sub decode_utf8_arg { require Encode; return Encode::decode('UTF-8', $_[0]) }
+
+my $ch = '';
+$ch = '블로그' if $t =~ /블로그/;
+$ch = '피드'   if $t =~ /인스타|피드/;
+$ch = '릴스'   if $t =~ /릴스/;
+
+my $b = $t;
+$b =~ s/^[^\p{Hangul}\p{Latin}0-9]+//;          # 앞의 이모지·기호
+$b =~ s/^\d{4}-\d{2}-\d{2}\s*//;                 # 앞의 날짜
+$b =~ s/\s*\((블로그|피드|릴스)\)\s*$//;           # 뒤의 (채널)
+$b =~ s/\s*(블로그|인스타|릴스)\s?체험단\s*$//;     # 뒤의 「블로그 체험단」
+$b =~ s/^\s+|\s+$//g;
+
+print "$ch\n$b\n";
+PERLEOF
+  CH="$(perl "$TMP/brand.pl" "$TITLE" | sed -n '1p')"
+  BRAND="$(perl "$TMP/brand.pl" "$TITLE" | sed -n '2p')"
+  [[ -n "$BRAND" ]] || { echo "오류: 제목에서 브랜드명을 뽑지 못했습니다: $TITLE" >&2; exit 1; }
   cat > "$TMP/rec.pl" <<'PERLEOF'
 use strict; use warnings;
 my ($key, $kind, $ch, $brand, $url, $out) = @ARGV;
