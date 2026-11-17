@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # 견적서 HTML → A4 세로 미리보기 PNG + PDF 생성
 #
-# 사용법:  bash "견적/도구/미리보기.sh" "견적/발행/2026/2026-09-12_위캔필라테스_인스타블로그체험단.html"
+# 사용법:  bash "도구/미리보기.sh" "견적/발행/2026/2026-09-12_위캔필라테스_인스타블로그체험단.html"
 # 결과:    같은 폴더에 .png (A4 세로 이미지) 와 .pdf 를 만든다.
 
 set -euo pipefail
 
 HTML="${1:-}"
 if [[ -z "$HTML" || ! -f "$HTML" ]]; then
-  echo "오류: HTML 파일 경로를 넘겨주세요. 예) bash '견적/도구/미리보기.sh' '견적/발행/2026/....html'" >&2
+  echo "오류: HTML 파일 경로를 넘겨주세요. 예) bash '도구/미리보기.sh' '견적/발행/2026/....html'" >&2
   exit 1
 fi
 
@@ -29,6 +29,13 @@ BASE="${ABS%.html}"
 URL="file:///$(cygpath -m "$ABS")"
 PNG_W="$(cygpath -w "$BASE.png")"
 PDF_W="$(cygpath -w "$BASE.pdf")"
+
+# 이전 결과를 먼저 지운다. 남아 있으면 브라우저가 실패해도 옛 파일을 보고 「성공」 으로 알린다.
+# 지워지지 않으면 뷰어에 열려 있는 것이다.
+for f in "$BASE.png" "$BASE.pdf"; do
+  rm -f "$f" 2>/dev/null || true
+  [[ -e "$f" ]] && { echo "오류: $(basename "$f") 가 열려 있어 덮어쓸 수 없습니다. 닫고 다시 실행하세요." >&2; exit 1; }
+done
 
 # A4 세로 794×1123px(96dpi) 기준, 2배 해상도로 선명하게
 "$BROWSER" --headless --disable-gpu --hide-scrollbars \

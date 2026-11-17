@@ -54,13 +54,19 @@ var 노션매핑 = [
   { 행: '해당 지원사업',        id: 'Yug%7B',         종류: 'rich_text' },
   { 행: '문의내용',           id: '_UgT',           종류: 'rich_text' },
   { 행: '출처',             id: 'bQ%5E%7C',       종류: 'select' },
-  { 행: '5-1 가이드',        id: 'anqh',           종류: 'url' },
-  { 행: '6 공고',           id: '%3FH%7Cw',       종류: 'url' },
-  { 행: '3-1 가이드',        id: 'QPiY',           종류: 'rich_text' },
-  { 행: '4 공고',           id: 'grxf',           종류: 'rich_text' },
+  // 가이드·공고는 기획형·체험단을 한 칸에 모은다(줄 앞에 [종류]). 주소가 여럿이라 url 이 아니라 글이다.
+  // 옛 「3-1 가이드」·「4 공고」 속성의 이름만 바꿔 그대로 쓴다. → 노션속성정리
+  // ★ 시트에 이 행이 없다 (2026-10-15 삭제). 이력칸 이 있으면 가이드·공고 이력 탭에서 바로 읽는다.
+  { 행: '가이드',            id: 'QPiY',           종류: 'rich_text', 이력칸: '가이드 문서' },
+  { 행: '공고',             id: 'grxf',           종류: 'rich_text', 이력칸: '공고 링크' },
   { 행: '견적금액',           id: 'Ilxl',           종류: 'rich_text' },
   { 행: '견적서',            id: '%3DvKS',         종류: 'url' },
-  { 행: '진행 갱신',          id: 'VVMT',           종류: 'rich_text' }
+  { 행: '계약서',            id: '%40ZTT',         종류: 'url' },
+  // ★ 진행 갱신은 **기계가 1시간마다 찍는 시각**이다. 사람이 손댈 값이 아니다.
+  //   보호 대상으로 두면, 동기화 도중 시트 쪽 시각이 바뀌는 것과 겹쳐
+  //   「사장님이 고쳤다」로 잘못 잡힌다. 실제로 8건이 그렇게 잘못 잠겼다.
+  //   항상덮기 를 켜서 비교 없이 시트 값으로 맞춘다. 단, 다른 칸을 쓸 때만 함께 맞춘다.
+  { 행: '진행 갱신',          id: 'VVMT',           종류: 'rich_text', 항상덮기: true }
 ];
 
 
@@ -130,6 +136,54 @@ function 노션_전부지우고다시() {
   return { 성공: true, 지움: 지움 };
 }
 
+/**
+ * 노션 DB 속성을 광고주 관리 탭의 카테고리 행에 맞춘다. 한 번만 돌린다.
+ *   「3-1 가이드」 → 「가이드」, 「4 공고」 → 「공고」 (이름만 바꾼다. ID 는 그대로)
+ *   「5-1 가이드」·「6 공고」 (url) → 지운다. 그 링크는 이제 가이드·공고 칸에 함께 들어간다
+ *   「계약서」 (url) → 없으면 만든다. 만든 ID 를 돌려주므로 노션매핑 에 적는다
+ * 미리보기면 지금 속성과 할 일만 돌려준다.
+ */
+function 노션속성정리(미리보기) {
+  var 토큰 = PropertiesService.getScriptProperties().getProperty('노션토큰');
+  if (!토큰) return { 성공: false, 오류: '노션토큰이 없습니다.' };
+  var res = UrlFetchApp.fetch(노션API + '/databases/' + 노션DB_ID, {
+    headers: 노션헤더(토큰), muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) return { 성공: false, 오류: res.getContentText().substring(0, 300) };
+  var 속성 = JSON.parse(res.getContentText()).properties || {};
+  var 이름별 = {}, id별 = {};
+  for (var n in 속성) { 이름별[n] = 속성[n]; id별[속성[n].id] = n; }
+
+  var 바꿀것 = {}, 할일 = [];
+  [['QPiY', '가이드'], ['grxf', '공고']].forEach(function (x) {
+    var 지금 = id별[x[0]];
+    if (!지금) { 할일.push('❗' + x[0] + ' 속성이 없습니다'); return; }
+    if (지금 === x[1]) return;
+    if (이름별[x[1]]) { 할일.push('❗이름 «' + x[1] + '» 이 이미 있어 «' + 지금 + '» 을 못 바꿉니다'); return; }
+    바꿀것[x[0]] = { name: x[1] };
+    할일.push('이름 바꿈: ' + 지금 + ' → ' + x[1]);
+  });
+  ['anqh', '%3FH%7Cw'].forEach(function (id) {
+    if (!id별[id]) return;
+    바꿀것[id] = null;
+    할일.push('지움: ' + id별[id]);
+  });
+  if (!이름별['계약서']) { 바꿀것['계약서'] = { url: {} }; 할일.push('만듦: 계약서 (url)'); }
+
+  if (미리보기 || !Object.keys(바꿀것).length) {
+    return { 성공: true, 미리보기: !!미리보기, 할일: 할일,
+             지금속성: Object.keys(속성).map(function (k) { return k + ' (' + 속성[k].type + ', ' + 속성[k].id + ')'; }) };
+  }
+
+  var r2 = UrlFetchApp.fetch(노션API + '/databases/' + 노션DB_ID, {
+    method: 'patch', contentType: 'application/json', headers: 노션헤더(토큰),
+    payload: JSON.stringify({ properties: 바꿀것 }), muteHttpExceptions: true
+  });
+  if (r2.getResponseCode() !== 200) return { 성공: false, 할일: 할일, 오류: r2.getContentText().substring(0, 300) };
+  var 새 = JSON.parse(r2.getContentText()).properties || {};
+  return { 성공: true, 할일: 할일, 계약서id: 새['계약서'] ? 새['계약서'].id : '' };
+}
+
 function 노션동기화실행(미리보기) {
   var 토큰 = PropertiesService.getScriptProperties().getProperty('노션토큰');
   if (!토큰) return { 성공: false, 오류: '노션토큰이 없습니다.' };
@@ -147,7 +201,13 @@ function 노션동기화실행(미리보기) {
     var l = String(값[i][0] || '').trim();
     if (l !== '') 행번호[l] = i;
   }
+  // 옛 행 배치면 가이드·공고 칸이 비어 보내져 노션 값이 지워진다. 정리 뒤에 돈다.
+  if (행번호['5-1 가이드'] !== undefined) {
+    return { 성공: false, 오류: '광고주 관리 탭이 옛 행 배치입니다. [카테고리정리] 를 먼저 실행하세요.' };
+  }
 
+  var 이력 = 이력읽기();
+  var 짝행 = 행번호['5-0 브랜드명'];
   var 기록 = 노션기록읽기();
   var 본run키 = {};                 // 이번 실행에서 같은 열쇠가 또 나오는지 센다
   var 만듦 = [], 갱신 = [], 보호 = [], 그대로 = [], 오류 = [];
@@ -175,6 +235,10 @@ function 노션동기화실행(미리보기) {
     // 시트에서 이번에 보낼 값
     var 보낼값 = {};
     노션매핑.forEach(function (m) {
+      if (m.이력칸) {
+        보낼값[m.id] = (짝행 === undefined) ? '' : 열이력칸(값[짝행][c - 1], 이력, m.이력칸);
+        return;
+      }
       var r = 행번호[m.행];
       보낼값[m.id] = (r === undefined) ? '' : 시트값글자(값[r][c - 1]);
     });
@@ -199,12 +263,21 @@ function 노션동기화실행(미리보기) {
     var 현재 = 노션페이지읽기(토큰, 줄.페이지);
     if (현재 === null) { 오류.push(업체 + ' — 읽기 실패'); continue; }
 
-    var 쓸것 = {}, 쓸개수 = 0, 이번보호 = [];
+    var 쓸것 = {}, 쓸개수 = 0, 이번보호 = [], 덮을것 = {};
     노션매핑.forEach(function (m) {
       if (m.종류 === 'title') return;                       // 제목은 열쇠라 건드리지 않는다
       var 마지막 = 줄.마지막[m.id];
       var 지금   = 현재[m.id] === undefined ? '' : 현재[m.id];
       var 시트   = 보낼값[m.id];
+
+      // 기계가 찍는 시각 같은 칸은 비교하지 않고 그대로 맞춘다.
+      // ★ 단, 이 칸만 바뀐 경우에는 쓰지 않는다. 진행 갱신은 매시간 찍히므로
+      //   이것만으로 쓰면 매시간 거의 모든 페이지를 고치고 「갱신」 수가 전체 업체 수가 된다.
+      //   다른 칸을 쓸 때만 함께 맞춘다 (아래 덮을것).
+      if (m.항상덮기) {
+        if (시트 !== 지금) 덮을것[m.id] = 시트;
+        return;
+      }
 
       if (마지막 === undefined) {                            // 한 번도 안 쓴 칸
         if (시트 !== '') { 쓸것[m.id] = 시트; 쓸개수++; }
@@ -217,6 +290,7 @@ function 노션동기화실행(미리보기) {
     if (이번보호.length) 보호.push(업체 + ' [' + 이번보호.join(', ') + ']');
 
     if (!쓸개수) { 그대로.push(업체); continue; }
+    for (var d in 덮을것) 쓸것[d] = 덮을것[d];            // 칸 수에는 넣지 않는다
     if (미리보기) { 갱신.push(업체 + ' (' + 쓸개수 + '칸)'); continue; }
 
     if (노션페이지고치기(토큰, 줄.페이지, 쓸것)) {

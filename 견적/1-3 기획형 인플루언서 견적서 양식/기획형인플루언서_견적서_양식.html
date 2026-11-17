@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!--
+  기획형 인플루언서 견적서 양식 (위더스콘텐츠) — 목차 1-3
+  1-1 체험단 견적서와 같은 틀이다. 품명 예) 인플루언서 원고료 / 대행비 (규격 `건`)
+  구조·문구를 변경하지 말 것. 중괄호 두 개로 감싼 자리표시자만 채워서 사용한다.
+  품명 행은 tbody 안의 ROWS 표시 주석 자리에 tr 을 생성해 넣는다 (총 9행 고정, 빈 행은 공백).
+  화면·인쇄 모두 A4 세로(210×297mm) 한 장으로 고정된다.
+  ※ 생성된 견적서에서는 이 주석 블록을 삭제한다.
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>견적서 - {{고객사명}}</title>
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "맑은 고딕", "Malgun Gothic", sans-serif;
+    color: #333; font-size: 11px;
+    margin: 0; padding: 0;          /* A4 한 장에 정확히 맞추기 위해 여백 없음 */
+    background: #E9EAEE;
+  }
+
+  /* A4 세로 한 장 */
+  .page {
+    width: 210mm; min-height: 297mm;
+    margin: 0 auto; padding: 14mm 13mm;
+    background: #fff;
+    box-shadow: 0 2px 14px rgba(0,0,0,.18);
+  }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { box-shadow: none; margin: 0; width: 210mm; height: 297mm; }
+  }
+
+  .topline { border-top: 3px solid #1F3864; margin-bottom: 2px; }
+  .topline2 { border-top: 1px solid #B4C6E7; margin-bottom: 22px; }
+
+  .head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 26px; }
+  .head h1 { font-size: 34px; font-weight: 800; color: #1F3864; margin: 0; letter-spacing: 2px; }
+  .head .date { font-size: 11px; color: #1F3864; }
+  .head .date b { margin-left: 10px; font-size: 12px; }
+
+  .parties { display: flex; gap: 18px; margin-bottom: 18px; }
+  .party { flex: 1; position: relative; }
+  .party .name { background: #EDEDF2; border-bottom: 2px solid #1F3864;
+                 padding: 9px 12px; font-size: 14px; font-weight: 700; color: #1F3864; }
+  .party table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .party td { padding: 4px 12px; vertical-align: top; line-height: 1.5; }
+  .party td.k { width: 86px; color: #555; letter-spacing: 4px; white-space: nowrap; }
+  .party td.v { color: #333; }
+  .supplier td.v { color: #2E5C9A; }
+  .stamp { position: absolute; top: 44px; right: 10px; width: 58px; height: 58px; opacity: .95; }
+
+  .notice { text-align: center; font-weight: 700; color: #1F3864; font-size: 12px;
+            margin: 18px 0 14px; }
+  .dash { border-top: 1px dashed #9BA4B4; margin: 12px 0; }
+
+  .amountbar { display: flex; align-items: center; background: #1F3864; color: #fff;
+               padding: 14px 20px; }
+  .amountbar .label { font-weight: 700; font-size: 13px; }
+  .amountbar .label small { display: block; font-weight: 400; font-size: 10px; opacity: .85; }
+  .amountbar .value { flex: 1; text-align: center; font-size: 17px; font-weight: 700; }
+  .amountbar .spacer { width: 92px; }
+
+  h2.sec { font-size: 14px; font-weight: 700; color: #1F3864; margin: 20px 0 8px; }
+
+  table.items { width: 100%; border-collapse: collapse; }
+  table.items th { background: #1F3864; color: #fff; font-weight: 600; font-size: 11px;
+                   padding: 8px 6px; border: 1px solid #1F3864; }
+  table.items td { border: 1px solid #C5CEE0; padding: 7px 8px; height: 26px; font-size: 11px; }
+  table.items td.c { text-align: center; }
+  table.items td.r { text-align: right; }
+  table.items col.nm { width: 30%; }
+  table.items col.sp { width: 12%; }
+  table.items col.qt { width: 10%; }
+  table.items col.pr { width: 16%; }
+  table.items col.sa { width: 16%; }
+  table.items col.tx { width: 16%; }
+
+  table.total { width: 46%; margin-left: auto; margin-top: 16px; border-collapse: collapse; }
+  table.total td { padding: 7px 10px; border-bottom: 1px solid #C5CEE0; font-size: 12px; }
+  table.total td.k { font-weight: 700; color: #1F3864; }
+  table.total td.v { text-align: right; font-weight: 700; }
+
+  h2.cond { font-size: 14px; font-weight: 700; color: #1F3864; margin: 26px 0 10px; }
+  ol.cond { margin: 0; padding-left: 18px; font-size: 11px; line-height: 2; color: #444; }
+  ol.cond ul { list-style: none; padding-left: 10px; margin: 2px 0; }
+  ol.cond ul li { display: inline-block; min-width: 200px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="topline"></div>
+  <div class="topline2"></div>
+
+  <div class="head">
+    <h1>견적서</h1>
+    <div class="date">견적일자 : <b>{{견적일자}}</b></div>
+  </div>
+
+  <div class="parties">
+    <!-- 공급받는 자 -->
+    <div class="party">
+      <div class="name">{{고객사명}}</div>
+      <table>
+        <tr><td class="k">담 당 자</td><td class="v">{{고객_담당자}}</td></tr>
+        <tr><td class="k">연 락 처</td><td class="v">{{고객_연락처}}</td></tr>
+        <tr><td class="k">견 적 명</td><td class="v">{{견적명}}</td></tr>
+        <tr><td class="k">참    조</td><td class="v">{{참조}}</td></tr>
+      </table>
+    </div>
+    <!-- 공급자 -->
+    <div class="party supplier">
+      <div class="name">위더스콘텐츠</div>
+      <img class="stamp" src="도장.png" alt="" onerror="this.style.display='none'">
+      <table>
+        <tr><td class="k">대 표 자</td><td class="v">하인덕</td></tr>
+        <tr><td class="k">사업자번호</td><td class="v">325-36-00382</td></tr>
+        <tr><td class="k">소 재 지</td><td class="v">부산광역시 해운대구 센텀북대로 60,<br>센텀IS타워 901호</td></tr>
+        <tr><td class="k">업태/종목</td><td class="v">서비스 / 광고대행</td></tr>
+        <tr><td class="k">연 락 처</td><td class="v">010-2473-5517</td></tr>
+        <tr><td class="k">담 당 자</td><td class="v">윤승회</td></tr>
+        <tr><td class="k">이 메 일</td><td class="v">tmdghl0809@naver.com</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="notice">아래와 같이 견적합니다.</div>
+  <div class="dash"></div>
+
+  <div class="amountbar">
+    <div class="label">견적금액<small>(VAT포함)</small></div>
+    <div class="value">￦{{견적금액}}</div>
+    <div class="spacer"></div>
+  </div>
+
+  <h2 class="sec">견적내용</h2>
+
+  <table class="items">
+    <colgroup>
+      <col class="nm"><col class="sp"><col class="qt"><col class="pr"><col class="sa"><col class="tx">
+    </colgroup>
+    <thead>
+      <tr><th>품명</th><th>규격/단위</th><th>수량</th><th>단가</th><th>공급가액</th><th>세액</th></tr>
+    </thead>
+    <tbody>
+      <!--ROWS-->
+    </tbody>
+  </table>
+
+  <table class="total">
+    <tr><td class="k">공급가액</td><td class="v">￦{{공급가액}}</td></tr>
+    <tr><td class="k">세액</td><td class="v">￦{{세액}}</td></tr>
+  </table>
+
+  <h2 class="cond">견적조건</h2>
+  <div class="dash"></div>
+  <ol class="cond">
+    <li>납품기한 : {{납품기한}}</li>
+    <li>결제조건 : {{결제조건}}</li>
+    <li>견적 유효기간 : 견적일로부터 14일간</li>
+    <li>결제정보
+      <ul>
+        <li>- 은행명 : 국민은행</li>
+        <li>- 계좌번호 : 121801-04-118647 하인덕(위더스콘텐츠)</li>
+      </ul>
+    </li>
+  </ol>
+
+</div>
+</body>
+</html>

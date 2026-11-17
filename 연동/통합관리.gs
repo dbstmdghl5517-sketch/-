@@ -11,11 +11,11 @@
  * ★ 만드는 것 (광고주 관리 워크북 안)
  *   [기존] 아임웹 문의 탭  ← 맨 아래에 진행 행을 덧붙인다
  *            5-0 브랜드명 : ← 짝을 맞추는 열쇠. 이 값이 없으면 진행 상황이 안 붙는다
- *            5-1 가이드   : 구글 문서 링크
- *            6 공고       : 노션 링크
- *            보완 필요    : 포포몬비즈가 채운 항목
  *            진행 갱신    : 시각
- *   [신설] 발행 이력  ← 원본 기록. 문의 탭은 이걸 보고 채운다
+ *            (가이드·공고·보완 필요 행은 2026-10-15 사용자 요청으로 뺐다.
+ *             링크는 가이드·공고 이력 탭에만 있고, 노션에는 이력 탭에서 바로 채운다)
+ *            견적금액·견적서·계약서 : 견적기록·계약서기록 이 쓴다
+ *   [신설] 가이드·공고 이력  ← 원본 기록. 문의 탭은 이걸 보고 채운다
  *   [신설] 5-0 응답   ← 신청서 원본 사본
  *
  * ★ 왜 「5-0 브랜드명」 행이 필요한가
@@ -31,7 +31,7 @@
  *   진행상태·1차cs 처럼 손으로 관리하는 행은 건드리지 않는다.
  *
  * 사용법
- *   1) [초기_탭만들기]        — 발행 이력 · 5-0 응답 탭을 만든다
+ *   1) [초기_탭만들기]        — 가이드·공고 이력 · 5-0 응답 탭을 만든다
  *   2) [초기_진행행만들기]    — 문의 탭 맨 아래에 진행 행 5개를 만든다
  *   3) [초기_브랜드명채우기]  — 짝이 분명한 열의 5-0 브랜드명을 채운다
  *   4) 비어 있는 5-0 브랜드명 칸을 사장님이 직접 채운다
@@ -45,34 +45,33 @@
 var 통합시트_ID = '14n42XJQ0QzTqzeFkaAHua-SMVQVtJjRQ5OQcpQ9ssl4';
 var 문의탭_GID  = 928374615;
 
-var 이력탭명 = '발행 이력';
+// ★ 탭은 **카테고리별**로 나눈다. 체험단·기획형은 같은 탭 안에서 종류 열로 가른다.
+//   전에는 가이드 이력이 두 탭(가이드 발행 이력 · 발행 이력)으로 갈라져 있었고,
+//   광고주 관리 탭도 5-1/3-1, 6/4 행이 따로 있어 같은 카테고리가 흩어져 보였다.
+var 이력탭명 = '가이드·공고 이력';
 var 응답탭명 = '기획형 응답';   // 시트에 실제로 있는 탭 이름. 바꾸면 여기도 같이 고친다
 
 // 문의 탭 맨 아래에 덧붙일 행. 순서대로 만든다.
 //
-// 기획형(5-1·6)과 체험단(3-1·4)을 **따로** 둔다.
-// 한 업체가 둘 다 진행하는 경우가 있다(예: 트레블로지 스위트 부산 센텀).
-// 행을 하나로 쓰면 나중에 만든 쪽이 앞의 것을 덮어써 링크가 사라진다.
 // `5-0 브랜드명` 은 두 종류가 함께 쓰는 열쇠다. 업체 열 하나에 브랜드명 하나면 된다.
+// ★ 가이드·공고·보완 필요 행은 두지 않는다 (2026-10-15 사용자 요청).
+//   여기에 다시 넣으면 진행행맞추기 가 세 탭에 행을 되살린다. → 진행행삭제
+var 뺀진행행 = ['가이드', '공고', '보완 필요'];
 var 진행행 = ['5-0 브랜드명',
-              '5-1 가이드', '6 공고', '보완 필요',
-              '3-1 가이드', '4 공고', '3-1 보완 필요',
-              '견적금액', '견적서',
-              '진행 갱신'];
+              '진행 갱신',
+              '견적금액', '견적서', '계약서', '입금'];
+// 입금: 한 칸에 입금 건을 줄마다 쌓는다. 예) 2026-10-14 1,100,000원 (1회차 대행금액, VAT포함)
+//   노션에는 입금일·금액 칸이 없고 입금현황(선택)만 있어서 상세는 여기에 남긴다.
 
-// ── 견적 이력 ─────────────────────────────────────────────
+// ── 견적서 이력 ───────────────────────────────────────────
 // 견적서는 파일로만 남고 시트에 아무 기록이 없었다. 공고와 달리 연동이 없었다.
 // 업체·금액·PDF 를 한곳에 쌓아 두면 나중에 「얼마에 보냈더라」를 찾을 수 있다.
-var 견적탭명 = '견적 이력';
+var 견적탭명 = '견적서 이력';
 var 견적머리글 = ['견적일', '업체명', '브랜드', '견적명', '품명', '수량', '단가',
                   '공급가액', '세액', '견적금액(VAT포함)', '견적서', '갱신'];
 var 견적폴더명 = '견적서';
 
-// 종류별 행 이름. 이력의 어느 칸을 어느 행에 쓸지 정한다.
-var 종류행 = {
-  '기획형': { 가이드: '5-1 가이드', 공고: '6 공고',  보완: '보완 필요' },
-  '체험단': { 가이드: '3-1 가이드', 공고: '4 공고',  보완: '3-1 보완 필요' }
-};
+var 종류목록 = ['기획형', '체험단', '공동구매'];   // 공동구매 = 6-1 (공동구매.gs)
 
 // 이력은 (종류, 채널, 브랜드) 로 찾는다.
 // 브랜드명만으로는 기획형과 체험단이 구분되지 않고,
@@ -81,7 +80,7 @@ var 종류행 = {
 var 이력머리글 = ['종류', '채널', '브랜드', '최초작성일', '가이드 문서', '가이드 갱신',
                   '공고 링크', '공고 갱신', '포포몬비즈 보완 항목'];
 
-// 채널 표기. 광고주 관리 탭 한 칸에 여러 채널을 모아 쓸 때 앞에 붙인다.
+// 채널 표기. 노션 한 칸에 여러 채널을 모아 쓸 때 앞에 붙인다.
 var 채널표시 = { '블로그': '📝 블로그', '피드': '📷 인스타', '릴스': '🎬 릴스' };
 
 // 업체명이 한 열뿐이어서 헷갈리지 않는 것만 적는다.
@@ -240,8 +239,11 @@ function 응답미러() {
 }
 
 /**
- * 발행 이력 → 문의 탭의 진행 행에 반영.
+ * 가이드·공고 이력과 짝이 맞는 업체 열에 진행 갱신 시각을 찍는다.
  * 5-0 브랜드명 행에 적힌 값으로 짝을 찾는다.
+ *
+ * ★ 가이드·공고·보완 필요 행은 더는 쓰지 않는다 (2026-10-15 사용자 요청).
+ *   링크는 가이드·공고 이력 탭에만 두고, 노션은 열이력칸 으로 이력에서 바로 채운다.
  */
 function 문의탭반영() {
   var sh = 문의탭();
@@ -251,56 +253,50 @@ function 문의탭반영() {
   var 이력 = 이력읽기();
   var 끝열 = sh.getLastColumn();
   var 브랜드들 = sh.getRange(짝행, 1, 1, 끝열).getValues()[0];
-
-  // 종류별로 행 번호를 미리 잡아 둔다
-  var 행 = {};
-  for (var 종류 in 종류행) {
-    행[종류] = {
-      가이드: 행확보(sh, 종류행[종류].가이드),
-      공고:   행확보(sh, 종류행[종류].공고),
-      보완:   행확보(sh, 종류행[종류].보완)
-    };
-  }
   var 갱신행 = 행확보(sh, '진행 갱신');
 
   var 지금 = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
   var 붙인수 = 0;
 
   for (var c = 2; c <= 끝열; c++) {
-    // 한 칸에 브랜드를 여럿 적을 수 있다. 쉼표나 줄바꿈으로 나눈다.
-    // 업체 열은 하나인데 지점이 둘인 경우(위캔필라테스 반여점·무거점) 때문이다.
-    var 브랜드들C = String(브랜드들[c - 1] || '').split(/[,\n]/)
-      .map(function (s) { return s.trim(); })
-      .filter(function (s) { return s !== ''; });
-    if (!브랜드들C.length) continue;
-    var 여럿 = 브랜드들C.length > 1;
-
-    var 하나라도 = false;
-    for (var t in 종류행) {
-      var 목록 = [];
-      브랜드들C.forEach(function (b) {
-        var m = 이력.묶음[t + '|' + b];
-        if (m) 목록 = 목록.concat(m);
-      });
-      if (!목록.length) continue;
-
-      // 체험단은 채널마다 공고가 따로 있다. 한 칸에 표기를 붙여 모아 쓴다.
-      sh.getRange(행[t].가이드, c).setValue(모아쓰기(목록, '가이드 문서', 여럿)).setWrap(true);
-      sh.getRange(행[t].공고,   c).setValue(모아쓰기(목록, '공고 링크', 여럿)).setWrap(true);
-      sh.getRange(행[t].보완,   c).setValue(모아쓰기(목록, '포포몬비즈 보완 항목', 여럿))
-        .setFontColor('#d40000').setWrap(true);
-      하나라도 = true;
-    }
-    if (하나라도) { sh.getRange(갱신행, c).setValue(지금); 붙인수++; }
+    if (!열이력(브랜드들[c - 1], 이력).목록.length) continue;
+    sh.getRange(갱신행, c).setValue(지금);
+    붙인수++;
   }
   return 붙인수;
 }
 
 /**
- * 채널별 값을 한 칸에 모아 쓴다.
- * 채널이 하나뿐이거나 채널 칸이 비어 있으면(기획형) 값만 쓴다.
- *   📝 블로그 https://…
- *   📷 인스타 https://…
+ * 업체 열의 5-0 브랜드명 칸 → 그 열에 해당하는 이력 줄 목록.
+ *   한 칸에 브랜드를 여럿 적을 수 있다. 쉼표나 줄바꿈으로 나눈다.
+ *   업체 열은 하나인데 지점이 둘인 경우(위캔필라테스 반여점·무거점) 때문이다.
+ *   기획형 → 체험단 순으로 모은다. 한 업체가 둘 다 진행하는 경우가 있다.
+ */
+function 열이력(브랜드칸, 이력) {
+  var 브랜드들C = String(브랜드칸 || '').split(/[,\n]/)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s !== ''; });
+  var 목록 = [];
+  종류목록.forEach(function (t) {
+    브랜드들C.forEach(function (b) {
+      var m = 이력.묶음[t + '|' + b];
+      if (m) 목록 = 목록.concat(m);
+    });
+  });
+  return { 목록: 목록, 여럿: 브랜드들C.length > 1 };
+}
+
+/** 업체 열의 이력 칸 하나를 한 칸 글로. 노션 가이드·공고 칸에 쓴다. */
+function 열이력칸(브랜드칸, 이력, 칸) {
+  var r = 열이력(브랜드칸, 이력);
+  return r.목록.length ? 모아쓰기(r.목록, 칸, r.여럿) : '';
+}
+
+/**
+ * 종류·채널별 값을 한 칸에 모아 쓴다. 줄마다 앞에 종류를 붙인다.
+ *   [기획형] https://…
+ *   [체험단] 📝 블로그 https://…
+ *   [체험단] 📷 인스타 https://…
  *
  * 한 열에 브랜드가 여럿일 때(위캔필라테스 반여점·무거점)는 브랜드명도 앞에 붙인다.
  * 업체 열은 하나인데 지점이 둘인 경우가 있어, 열을 새로 만들지 않고 한 칸에 모은다.
@@ -311,6 +307,7 @@ function 모아쓰기(목록, 칸, 브랜드표시) {
     var v = String(o[칸] == null ? '' : o[칸]).trim();
     if (v === '') return;
     var 앞 = [];
+    if (o['_종류']) 앞.push('[' + o['_종류'] + ']');
     if (브랜드표시 && o['_브랜드']) 앞.push(o['_브랜드']);
     var ch = o['_채널'] || '';
     if (ch !== '') 앞.push(채널표시[ch] || ch);
@@ -320,7 +317,7 @@ function 모아쓰기(목록, 칸, 브랜드표시) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 발행 이력
+// 가이드·공고 이력
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -342,6 +339,7 @@ function 이력읽기() {
     if (b === '') continue;
     var o = {};
     for (var c = 0; c < 머리.length; c++) o[머리[c]] = 값[r][c];
+    o['_종류'] = 종류;
     o['_채널'] = 채널;
     o['_브랜드'] = b;
     낱개[종류 + '|' + 채널 + '|' + b] = o;
@@ -611,8 +609,277 @@ function 견적기록(d) {
   return { 성공: true, 탭: 견적탭명, 행: 행, 링크: 링크, 광고주관리: 반영 };
 }
 
+// ── 업체 사업자등록증 · 업체 계약서 ──────────────────────────
+// 업체명은 **사업자등록증 상호**가 기준이다 (브랜드명과 다르다. 예: 인디언 ↔ 어반캠핑 인디언바베큐).
+// 계약서는 이 탭의 상호·대표자·등록번호와 견적 이력의 금액으로 만든다.
+var 사업자탭명 = '사업자등록증';
+var 사업자머리글 = ['업체명(상호)', '브랜드', '등록번호', '대표자', '개업일', '사업장 소재지',
+                    '업태', '종목', '과세유형', '사업자등록증', '갱신'];
+var 사업자폴더명 = '사업자등록증';
+
+var 계약탭명 = '계약서 이력';
+var 계약머리글 = ['계약일', '구분', '업체명(상호)', '브랜드', '계약명', '상대방', '계약기간',
+                  '계약금액(VAT포함)', '공급가액', '세액', '연결 견적서', '사업자등록번호',
+                  '계약서', '갱신'];
+var 계약폴더명 = '계약서';
+
 /**
- * 발행 이력에서 잘못 쌓인 줄을 지운다.
+ * 파일을 드라이브 폴더에 올리고 링크를 돌려준다. 같은 이름은 휴지통으로 보낸다.
+ * 공유 설정은 건드리지 않는다 — 기본값(비공개)으로 둔다.
+ * 계약서에는 주민번호·계좌번호, 사업자등록증에는 생년월일이 들어 있다.
+ */
+function 파일올리기(폴더명, 파일명, base64, 형식) {
+  if (!base64 || !파일명) return '';
+  var 폴더 = 폴더확보(폴더명);
+  var it = 폴더.getFilesByName(파일명);
+  while (it.hasNext()) it.next().setTrashed(true);
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), 형식 || 'application/pdf', 파일명);
+  return 폴더.createFile(blob).getUrl();
+}
+
+/** 머리글이 있는 탭에서 키 열 값이 모두 같은 행을 찾아 덮어쓰거나 새로 쓴다. */
+function 행맞춰쓰기(탭명, 머리글, 줄, 키열들) {
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+  var sh = 탭확보(ss, 탭명);
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, 머리글.length).setValues([머리글])
+      .setFontWeight('bold').setBackground('#F2F4F8');
+    sh.setFrozenRows(1);
+  }
+  var 행 = 0;
+  if (sh.getLastRow() > 1) {
+    var 기존 = sh.getRange(2, 1, sh.getLastRow() - 1, 머리글.length).getValues();
+    for (var i = 0; i < 기존.length && !행; i++) {
+      var 같음 = 키열들.every(function (k) {
+        return String(기존[i][k]).trim() === String(줄[k]).trim();
+      });
+      if (같음) 행 = i + 2;
+    }
+  }
+  if (!행) 행 = sh.getLastRow() + 1;
+  sh.getRange(행, 1, 1, 줄.length).setValues([줄]);
+  return 행;
+}
+
+/**
+ * 사업자등록증 한 건. 등록번호가 같으면 그 줄을 갱신한다.
+ * 인자: { 업체명, 브랜드, 등록번호, 대표자, 개업일, 소재지, 업태, 종목, 과세유형,
+ *         파일명, 파일(base64), 형식 }
+ */
+function 사업자등록기록(d) {
+  d = d || {};
+  if (!String(d.등록번호 || '').trim()) return { 성공: false, 오류: '등록번호가 비어 있습니다.' };
+  var 링크 = '';
+  try { 링크 = 파일올리기(사업자폴더명, d.파일명, d.파일, d.형식 || 'image/png'); }
+  catch (e) { Logger.log('사업자등록증 업로드 실패: ' + e); }
+  var 지금 = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+  var 줄 = [d.업체명 || '', d.브랜드 || '', d.등록번호, d.대표자 || '', d.개업일 || '',
+            d.소재지 || '', d.업태 || '', d.종목 || '', d.과세유형 || '', 링크, 지금];
+  var 행 = 행맞춰쓰기(사업자탭명, 사업자머리글, 줄, [2]);
+  return { 성공: true, 탭: 사업자탭명, 행: 행, 링크: 링크 };
+}
+
+/**
+ * 계약서 한 건. (구분, 업체명, 계약명, 상대방) 이 같으면 그 줄을 갱신한다.
+ * 구분: 업체계약서(1-7, 광고주와) / 인플루언서계약서(1-6, 인플루언서 개인과)
+ * ★ 주민번호·계좌번호는 칸에 넣지 않는다. PDF 안에만 있다.
+ */
+function 계약서기록(d) {
+  d = d || {};
+  var 구분 = String(d.구분 || '').trim();
+  if (구분 !== '업체계약서' && 구분 !== '인플루언서계약서') {
+    return { 성공: false, 오류: '구분은 업체계약서 / 인플루언서계약서 중 하나여야 합니다.' };
+  }
+  if (!String(d.업체명 || '').trim()) return { 성공: false, 오류: '업체명이 비어 있습니다.' };
+  var 링크 = '';
+  try { 링크 = 파일올리기(계약폴더명, d.파일명, d.pdf, 'application/pdf'); }
+  catch (e) { Logger.log('계약서 업로드 실패: ' + e); }
+  var 지금 = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+  var 줄 = [d.계약일 || 지금.slice(0, 10), 구분, d.업체명, d.브랜드 || '', d.계약명 || '',
+            d.상대방 || '', d.계약기간 || '', d.계약금액 || '', d.공급가액 || '', d.세액 || '',
+            d.연결견적서 || '', d.등록번호 || '', 링크, 지금];
+  var 행 = 행맞춰쓰기(계약탭명, 계약머리글, 줄, [1, 2, 4, 5]);
+
+  // 광고주 관리 탭 — 업체 열의 `계약서` 행에 링크. 광고주와 맺은 계약(1-7)만 쓴다.
+  // 인플루언서 계약(1-6)은 상대가 인플루언서 개인이라 업체 열에 붙이지 않는다.
+  // 견적서와 같이 열 번호를 주면 그 열에 쓴다 (시트 기업명과 상호가 다를 때).
+  var 반영 = [];
+  if (구분 === '업체계약서' && 링크) {
+    try {
+      var r = 칸쓰기('계약서', [{ 기업명: d.열 ? '' : String(d.업체명).trim(), 열: d.열, 값: 링크 }]);
+      반영 = (r.쓴것 || []).concat((r.건너뜀 || []).map(function (s) { return '건너뜀: ' + s; }));
+    } catch (e) { Logger.log('광고주 관리 반영 실패: ' + e); }
+  }
+  return { 성공: true, 탭: 계약탭명, 행: 행, 링크: 링크, 광고주관리: 반영 };
+}
+
+/**
+ * 계약서 기록 한 줄을 지운다. (구분, 업체명, 계약명, 상대방) 이 모두 같은 줄만.
+ * 드라이브 파일도 휴지통으로 보낸다(30일 안에는 되살릴 수 있다).
+ * 같은 계약을 이름만 다르게 두 번 올렸을 때 쓴다.
+ */
+function 계약서삭제(d) {
+  d = d || {};
+  var 키 = [String(d.구분 || '').trim(), String(d.업체명 || '').trim(),
+            String(d.계약명 || '').trim(), String(d.상대방 || '').trim()];
+  if (키.some(function (s) { return s === ''; })) {
+    return { 성공: false, 오류: '구분·업체명·계약명·상대방이 모두 필요합니다.' };
+  }
+  var sh = SpreadsheetApp.openById(통합시트_ID).getSheetByName(계약탭명);
+  if (!sh || sh.getLastRow() < 2) return { 성공: false, 오류: '계약서 탭이 비어 있습니다.' };
+  var 값 = sh.getRange(2, 1, sh.getLastRow() - 1, 계약머리글.length).getValues();
+  for (var i = 값.length - 1; i >= 0; i--) {
+    var 같음 = [1, 2, 4, 5].every(function (k, j) { return String(값[i][k]).trim() === 키[j]; });
+    if (!같음) continue;
+    var 링크 = String(값[i][12] || '');
+    var m = 링크.match(/\/d\/([A-Za-z0-9_-]+)/);
+    var 휴지통 = false;
+    if (m) { try { DriveApp.getFileById(m[1]).setTrashed(true); 휴지통 = true; } catch (e) {} }
+    sh.deleteRow(i + 2);
+
+    // ★ 파일올리기 는 같은 이름의 파일을 휴지통으로 보낸다.
+    //   중복으로 올린 쪽이 같은 파일명이었다면 **남길 줄의 파일이 이미 휴지통에 있다.**
+    //   같은 업체의 남은 줄이 가리키는 파일 중 휴지통에 있는 것은 되살린다.
+    var 복구 = [];
+    값.forEach(function (row, j) {
+      if (j === i || String(row[2]).trim() !== 키[1]) return;
+      var mm = String(row[12] || '').match(/\/d\/([A-Za-z0-9_-]+)/);
+      if (!mm) return;
+      try {
+        var f = DriveApp.getFileById(mm[1]);
+        if (f.isTrashed()) { f.setTrashed(false); 복구.push(f.getName()); }
+      } catch (e) {}
+    });
+    return { 성공: true, 지운행: i + 2, 파일휴지통: 휴지통, 되살림: 복구 };
+  }
+  return { 성공: false, 오류: '맞는 줄이 없습니다.' };
+}
+
+/**
+ * 계약서 양식을 새 스프레드시트로 만든다 (드라이브 `계약서 양식` 폴더).
+ * A4 세로 폭(열 합계 720px)에 맞춘 문서형 배치다.
+ *   열: A 여백 20 | B 30 | C 70 | D 100 | E 150 | F 90 | G 240 | H 여백 20
+ * 인자: { 제목, 배치: [{k, t, n, l1, v1, l2, v2, h, s, b, u, head}], 변수, pdf확인 }
+ *   k = cover · gap · title · para · center · right · h(조 제목) · item(1) 번호)
+ *       · item2(1-1) 번호) · bullet · note · kv(좌 라벨/우 값 표) · sign(좌우 서명표) · box
+ *   h = 행 높이(px). ★ 병합 셀은 자동 높이가 안 되므로 로컬에서 계산해 넘긴다.
+ * `{{변수}}` 는 빨간 글자 — 원본 문서에서 빨강 = 건마다 바꿀 자리.
+ * 같은 제목이 있으면 휴지통으로 보내고 새로 만든다.
+ */
+function 계약양식시트(d) {
+  d = d || {};
+  var 제목 = String(d.제목 || '').trim();
+  var 배치 = d.배치 || [];
+  if (!제목 || !배치.length) return { 성공: false, 오류: '제목·배치가 비어 있습니다.' };
+  var 폴더 = 폴더확보('계약서 양식');
+  var it = 폴더.getFilesByName(제목);
+  while (it.hasNext()) it.next().setTrashed(true);
+
+  var ss = SpreadsheetApp.create(제목, 배치.length + 2, 8);
+  DriveApp.getFileById(ss.getId()).moveTo(폴더);
+  var sh = ss.getSheets()[0].setName('계약서 양식');
+  [20, 30, 70, 100, 150, 90, 240, 20].forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  sh.setHiddenGridlines(true);
+  sh.getRange(1, 1, 배치.length + 2, 8).setFontFamily('Malgun Gothic').setFontSize(10)
+    .setVerticalAlignment('middle').setWrap(true)
+    .setNumberFormat('@');   // (1) 이 -1 숫자로 바뀌지 않게 전부 텍스트로
+
+  var 빨강 = SpreadsheetApp.newTextStyle().setForegroundColor('#E00000').build();
+  function 글(t) {
+    t = String(t == null ? '' : t);
+    var b = SpreadsheetApp.newRichTextValue().setText(t);
+    var re = /\{\{[^}]+\}\}/g, m;
+    while ((m = re.exec(t)) !== null) b.setTextStyle(m.index, m.index + m[0].length, 빨강);
+    return b.build();
+  }
+  function 칸(r, c1, c2, t) {
+    var g = sh.getRange(r, c1, 1, c2 - c1 + 1);
+    if (c2 > c1) g.merge();
+    g.setRichTextValue(글(t));
+    return g;
+  }
+  function 테두리(g) {
+    g.setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    return g;
+  }
+
+  배치.forEach(function (x, i) {
+    var r = i + 1;
+    sh.setRowHeight(r, x.h || 21);
+    if (x.k === 'cover') {
+      칸(r, 2, 7, x.t).setHorizontalAlignment('center').setFontWeight('bold').setFontSize(x.s || 14);
+    } else if (x.k === 'title') {
+      칸(r, 2, 7, x.t).setHorizontalAlignment('center').setFontWeight('bold').setFontSize(x.s || 15)
+        .setFontLine(x.u ? 'underline' : 'none');
+    } else if (x.k === 'para') {
+      칸(r, 2, 7, x.t).setFontWeight(x.b ? 'bold' : 'normal');
+    } else if (x.k === 'center' || x.k === 'right') {
+      칸(r, 2, 7, x.t).setHorizontalAlignment(x.k).setFontWeight(x.b ? 'bold' : 'normal');
+    } else if (x.k === 'h') {
+      칸(r, 2, 7, x.t).setFontWeight('bold').setFontSize(11).setVerticalAlignment('bottom');
+    } else if (x.k === 'item') {
+      칸(r, 2, 2, x.n).setVerticalAlignment('top');
+      칸(r, 3, 7, x.t).setVerticalAlignment('top').setFontWeight(x.b ? 'bold' : 'normal');
+    } else if (x.k === 'item2' || x.k === 'bullet') {
+      칸(r, 3, 3, x.n).setVerticalAlignment('top').setHorizontalAlignment('right');
+      칸(r, 4, 7, x.t).setVerticalAlignment('top').setFontWeight(x.b ? 'bold' : 'normal');
+    } else if (x.k === 'note') {
+      칸(r, 3, 7, x.t).setFontSize(9).setFontColor('#444444').setVerticalAlignment('top');
+    } else if (x.k === 'kv') {
+      테두리(칸(r, 3, 4, x.l1)).setFontWeight('bold').setBackground('#F2F2F2').setHorizontalAlignment('center');
+      테두리(칸(r, 5, 7, x.v1));
+    } else if (x.k === 'sign') {
+      [[2, 3, x.l1], [4, 5, x.v1], [6, 6, x.l2], [7, 7, x.v2]].forEach(function (c, j) {
+        var g = 테두리(칸(r, c[0], c[1], c[2]));
+        if (j % 2 === 0 || x.head) g.setFontWeight('bold').setHorizontalAlignment('center').setBackground('#F2F2F2');
+      });
+    } else if (x.k === 'box') {
+      테두리(칸(r, 2, 7, x.t)).setHorizontalAlignment('center').setFontWeight('bold').setFontSize(11);
+    }
+  });
+
+  var 변수 = d.변수 || [];
+  if (변수.length) {
+    var v = ss.insertSheet('입력값');
+    v.getRange(1, 1, 1, 3).setValues([['변수', '설명', '값']])
+      .setFontWeight('bold').setBackground('#F2F4F8');
+    v.getRange(2, 1, 변수.length, 2).setValues(변수);
+    v.setColumnWidth(1, 140); v.setColumnWidth(2, 380); v.setColumnWidth(3, 260);
+    v.setFrozenRows(1);
+  }
+  SpreadsheetApp.flush();
+  var 결과 = { 성공: true, 링크: ss.getUrl() };
+  if (d.pdf확인) 결과.pdf = 시트A4pdf(ss.getId(), sh.getSheetId());
+  return 결과;
+}
+
+/** 시트 한 장을 A4 세로 · 너비 맞춤 · 눈금선 없음으로 내보낸 PDF (base64). 쪽 나눔 확인용. */
+function 시트A4pdf(id, gid) {
+  var url = 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=pdf&gid=' + gid +
+    '&size=A4&portrait=true&fitw=true&gridlines=false&printtitle=false&sheetnames=false' +
+    '&pagenum=UNDEFINED&top_margin=0.5&bottom_margin=0.5&left_margin=0.5&right_margin=0.5' +
+    '&horizontal_alignment=CENTER';
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } });
+  return Utilities.base64Encode(res.getBlob().getBytes());
+}
+
+/** 계약서를 만들 때 읽는다. 업체의 사업자등록증 줄과 견적 이력 줄을 돌려준다. */
+function 업체자료(업체) {
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+  function 줄들(탭, 열) {
+    var sh = ss.getSheetByName(탭);
+    if (!sh || sh.getLastRow() < 2) return [];
+    var v = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getDisplayValues();
+    var h = v[0];
+    return v.slice(1).filter(function (r) { return String(r[열]).trim() === 업체; })
+      .map(function (r) { var o = {}; h.forEach(function (k, i) { o[k] = r[i]; }); return o; });
+  }
+  return { 성공: true, 사업자: 줄들(사업자탭명, 0), 견적: 줄들(견적탭명, 1) };
+}
+
+/**
+ * 가이드·공고 이력에서 잘못 쌓인 줄을 지운다.
  *
  * ★ 왜 필요한가
  *   도구 쪽 변수 이름이 겹쳐 종류가 `page` 로 기록되고, 제목의 이모지를 못 떼어
@@ -657,7 +924,7 @@ function 이력정리(미리보기) {
 function 이력정리_미리보기() { return 이력정리(true); }
 
 /**
- * 발행 이력에 한 줄 기록(있으면 갱신).
+ * 가이드·공고 이력에 한 줄 기록(있으면 갱신).
  * 넘기지 않은 칸은 기존 값을 지우지 않는다. 5-1 과 6 이 따로 기록하기 때문이다.
  */
 function 이력기록(종류, 채널, 브랜드, 변경) {
@@ -763,6 +1030,311 @@ function 초기_이력탭재구성() {
   [10, 10, 22, 12, 46, 16, 46, 16, 40].forEach(function (w, i) { sh.setColumnWidth(i + 1, w * 8); });
 
   Logger.log('이력 탭 재구성 완료: ' + (새행.length - 1) + '건 (빈 줄·시험 줄 제거)');
+}
+
+// ═══════════════════════════════════════════════════════════
+// 카테고리 정리 (한 번만) — 체험단·기획형 구분 없이 같은 카테고리끼리
+// ═══════════════════════════════════════════════════════════
+/**
+ * ★ 왜 필요한가
+ *   가이드 이력이 `가이드 발행 이력`(9월분) 과 `발행 이력`(이후) 두 탭으로 갈라져 있었고,
+ *   광고주 관리 탭도 5-1/3-1 가이드, 6/4 공고, 보완 필요/3-1 보완 필요 가 따로 있었다.
+ *   계약서는 광고주 관리 탭에 행조차 없었다. 같은 카테고리가 흩어져 찾기 어려웠다.
+ *
+ * ★ 하는 일
+ *   1) 탭 이름을 카테고리로 바꾼다 (발행 이력 → 가이드·공고 이력 등)
+ *   2) `가이드 발행 이력` 을 `가이드·공고 이력` 에 합치고 옛 탭은 숨긴다 (지우지 않는다)
+ *      브랜드 칸에 「○○ 체험단 공고」 처럼 공고 제목이 들어간 줄은 브랜드명으로 고친다
+ *   3) 광고주 관리·불발·진행완료 탭의 행을 합친다 — 가이드 / 공고 / 보완 필요 / 계약서
+ *      세 탭은 같은 가로 배치라 함께 바꿔야 열 이동이 어긋나지 않는다
+ *   4) 탭 순서를 카테고리별로 모으고 색을 입힌다. 프로그램용 탭은 숨긴다
+ *
+ * ★ 여러 번 돌려도 된다. 이미 바뀐 것은 건너뛴다. 먼저 미리보기로 확인한다.
+ */
+var 옛탭이름 = {
+  '발행 이력': 이력탭명, '견적 이력': 견적탭명,
+  '업체 계약서': 계약탭명, '업체 사업자등록증': 사업자탭명
+};
+var 옛가이드이력탭 = '가이드 발행 이력';
+var 옛행합치기 = [
+  { 새: '가이드',    기획형: '5-1 가이드', 체험단: '3-1 가이드' },
+  { 새: '공고',      기획형: '6 공고',     체험단: '4 공고' },
+  { 새: '보완 필요', 기획형: '보완 필요',  체험단: '3-1 보완 필요' }
+];
+// 탭 순서. 색이 같은 것끼리 한 카테고리다. 목록에 없는 탭은 뒤에 그대로 둔다.
+var 탭묶음 = [
+  { 색: null,      탭: ['광고주 관리', '불발', '진행완료'] },
+  { 색: '#4A86E8', 탭: [이력탭명, '3-1 체험단 가이드'] },
+  { 색: '#E69138', 탭: [견적탭명] },
+  { 색: '#6AA84F', 탭: [계약탭명, 사업자탭명] },
+  { 색: '#8E7CC3', 탭: ['기획형 응답', '체험단, 기자단, 릴스 응답', '제품형 양식폼'] }
+];
+
+/**
+ * 응답 탭 정리 (2026-10-15 사용자 요청, 한 번만)
+ *   · `5-0 응답 (16문항)` 삭제 — 16문항 폼 접수는 이미 `기획형 응답` 에 합쳐 들어간다
+ *   · `체험단 응답` 삭제 — 체험단 폼 자동 기록을 `체험단, 기자단, 릴스 응답` 으로 옮겼다
+ * ★ 지우기 전에 옮겨 받는 탭이 실제로 채워졌는지 확인한다. 비어 있으면 지우지 않는다.
+ */
+function 응답탭정리() {
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+  var 결과 = [];
+
+  var n1 = 응답미러();
+  var 기획 = ss.getSheetByName(응답탭명);
+  var 열16 = 기획 ? 기획.getRange(2, 2, Math.max(기획.getLastRow() - 1, 1), 1).getValues()
+                      .filter(function (r) { return r[0] === '16문항'; }).length : 0;
+  var 옛16 = ss.getSheetByName('5-0 응답 (16문항)');
+  if (옛16) {
+    if (열16 > 0) { ss.deleteSheet(옛16); 결과.push('삭제: 5-0 응답 (16문항) — 기획형 응답에 16문항 ' + 열16 + '건 확인'); }
+    else 결과.push('❗기획형 응답에 16문항 접수가 없어 5-0 응답 (16문항) 을 지우지 않았습니다');
+  }
+
+  var n2 = (typeof 체험단_응답미러 === 'function') ? 체험단_응답미러() : 0;
+  var 옛체 = ss.getSheetByName('체험단 응답');
+  if (옛체 && 체험단응답탭 !== '체험단 응답') {
+    if (n2 > 0) { ss.deleteSheet(옛체); 결과.push('삭제: 체험단 응답 — ' + 체험단응답탭 + ' 에 ' + n2 + '건 기록 확인'); }
+    else 결과.push('❗' + 체험단응답탭 + ' 이 비어 체험단 응답 을 지우지 않았습니다');
+  }
+
+  결과 = 결과.concat(탭배치(ss, false));
+  결과.unshift('기획형 응답 ' + n1 + '건 / ' + 체험단응답탭 + ' ' + n2 + '건');
+  결과.forEach(function (s) { Logger.log(s); });
+  return { 성공: true, 기록: 결과 };
+}
+var 숨길탭 = [옛가이드이력탭, '_노션동기화', '_상태추적'];
+
+function 카테고리정리_미리보기() { return 카테고리정리(true); }
+
+function 카테고리정리(미리보기) {
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+  var 기록 = [];
+
+  // 1) 탭 이름
+  for (var 옛 in 옛탭이름) {
+    var a = ss.getSheetByName(옛), b = ss.getSheetByName(옛탭이름[옛]);
+    if (!a) continue;
+    if (b) { 기록.push('탭 이름: «' + 옛탭이름[옛] + '» 이 이미 있어 «' + 옛 + '» 은 그대로 둡니다'); continue; }
+    if (!미리보기) a.setName(옛탭이름[옛]);
+    기록.push('탭 이름: ' + 옛 + ' → ' + 옛탭이름[옛]);
+  }
+
+  // 2) 가이드·공고 이력 합치기
+  기록 = 기록.concat(이력합치기(ss, 미리보기));
+
+  // 3) 광고주 관리·불발·진행완료 행 합치기
+  var 대상 = [문의탭()];
+  ['불발', '진행완료'].forEach(function (n) { var t = ss.getSheetByName(n); if (t) 대상.push(t); });
+  대상.forEach(function (sh) { 기록 = 기록.concat(행합치기(sh, 미리보기)); });
+
+  // 이력 전체로 광고주 관리 칸을 다시 만든다. 합친 칸의 형식을 새 형식으로 맞춘다.
+  if (!미리보기) {
+    try { 기록.push('광고주 관리 칸 다시 채움: ' + 문의탭반영() + '개 업체'); }
+    catch (e) { 기록.push('❗문의탭반영 실패: ' + e); }
+  }
+
+  // 4) 탭 순서·색·숨김
+  기록 = 기록.concat(탭배치(ss, 미리보기));
+
+  기록.forEach(function (s) { Logger.log((미리보기 ? '[미리보기] ' : '') + s); });
+  return { 성공: true, 미리보기: !!미리보기, 기록: 기록 };
+}
+
+/** 공고 제목이 브랜드 칸에 들어간 경우 브랜드명만 남긴다. 예: 「밸류브릿지 체험단 공고」 */
+function 브랜드다듬기(b) {
+  return String(b == null ? '' : b).trim()
+    .replace(/\s*\((블로그|피드|릴스)\)\s*$/, '')
+    .replace(/\s*(블로그\s*|인스타\s*|릴스\s*)?체험단(\s*공고)?\s*$/, '')
+    .trim();
+}
+
+function 이력합치기(ss, 미리보기) {
+  var 기록 = [];
+  var sh = ss.getSheetByName(이력탭명) || ss.getSheetByName('발행 이력');
+  if (!sh) { 기록.push('❗이력 탭이 없습니다'); return 기록; }
+
+  var 표 = sh.getLastRow() ? sh.getRange(1, 1, sh.getLastRow(), 이력머리글.length).getValues() : [이력머리글];
+  var 줄들 = 표.slice(1);
+  var 옛 = ss.getSheetByName(옛가이드이력탭);
+  var 옛줄 = (옛 && 옛.getLastRow() > 1)
+    ? 옛.getRange(2, 1, 옛.getLastRow() - 1, 이력머리글.length).getValues() : [];
+
+  function 키(r) { return String(r[0]).trim() + '|' + String(r[1]).trim() + '|' + String(r[2]).trim(); }
+
+  // ★ 지금 쓰는 탭의 값이 우선이다. 옛 탭은 빈 칸만 채운다.
+  //   같은 줄이 두 탭에 있으면 지금 탭 쪽이 더 나중에 갱신된 값이다.
+  var 새것 = {}, 새순서 = [];
+  function 넣기(r, 출처) {
+    if (String(r[2]).trim() === '') return;
+    var k = 키(r);
+    if (!새것[k]) { 새것[k] = r.slice(); 새순서.push(k); return; }
+    var 기존 = 새것[k], 채움 = 0;
+    for (var c = 0; c < 이력머리글.length; c++) {
+      if (String(기존[c]).trim() === '' && String(r[c]).trim() !== '') { 기존[c] = r[c]; 채움++; }
+    }
+    기록.push('이력 합침: ' + k.replace(/\|/g, ' · ') + ' (' + 출처 + ' → 빈 칸 ' + 채움 + '개 채움)');
+  }
+  줄들.forEach(function (r) {
+    var 원래 = String(r[2]).trim(), 다듬 = 브랜드다듬기(원래);
+    if (다듬 !== 원래) 기록.push('브랜드 고침: «' + 원래 + '» → «' + 다듬 + '»');
+    r[2] = 다듬;
+    넣기(r, '지금 탭');
+  });
+  var 옛순서 = [];
+  옛줄.forEach(function (r) {
+    r[2] = 브랜드다듬기(r[2]);
+    if (String(r[2]).trim() === '') return;
+    옛순서.push(키(r));
+    넣기(r, 옛가이드이력탭);
+  });
+
+  // 순서: 옛 탭(9월분) 먼저, 그다음 지금 탭에만 있는 줄. 날짜 순서가 대체로 맞는다.
+  var 본 = {}, 결과 = [];
+  옛순서.concat(새순서).forEach(function (k) {
+    if (본[k]) return;
+    본[k] = true;
+    결과.push(새것[k]);
+  });
+
+  기록.push('가이드·공고 이력: 지금 탭 ' + 줄들.length + '줄 + 옛 탭 ' + 옛줄.length + '줄 → ' + 결과.length + '줄');
+  if (미리보기) return 기록;
+
+  sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 이력머리글.length).clearContent();
+  if (결과.length) sh.getRange(2, 1, 결과.length, 이력머리글.length).setValues(결과);
+  sh.getRange(1, 1, 1, 이력머리글.length).setValues([이력머리글])
+    .setFontWeight('bold').setBackground('#F2F4F8');
+  sh.setFrozenRows(1);
+  return 기록;
+}
+
+/** 한 탭의 옛 진행 행(5-1/3-1 …)을 카테고리 행으로 합친다. 계약서 행이 없으면 만든다. */
+function 행합치기(sh, 미리보기) {
+  var 기록 = [], 이름 = sh.getName();
+  if (!행찾기(sh, '5-1 가이드') && 행찾기(sh, '가이드')) {
+    기록.push(이름 + ': 이미 카테고리 행입니다');
+  } else {
+    var 끝열 = sh.getLastColumn();
+    var 지울행 = [];
+    옛행합치기.forEach(function (m) {
+      var r1 = 행찾기(sh, m.기획형), r2 = 행찾기(sh, m.체험단);
+      if (!r1 && !r2) return;
+      var v1 = r1 ? sh.getRange(r1, 1, 1, 끝열).getValues()[0] : [];
+      var v2 = r2 ? sh.getRange(r2, 1, 1, 끝열).getValues()[0] : [];
+      var 새 = [m.새];
+      var 채운칸 = 0;
+      for (var c = 1; c < 끝열; c++) {
+        var 줄 = 종류붙이기(v1[c], '기획형').concat(종류붙이기(v2[c], '체험단'));
+        새.push(줄.join('\n'));
+        if (줄.length) 채운칸++;
+      }
+      var 자리 = r1 || r2;
+      기록.push(이름 + ': ' + [m.기획형, m.체험단].join(' + ') + ' → ' + m.새 + ' (' + 자리 + '행, ' + 채운칸 + '개 업체)');
+      if (미리보기) return;
+      sh.getRange(자리, 1, 1, 끝열).setValues([새]).setWrap(true);
+      if (r1 && r2) 지울행.push(r2);
+    });
+    if (!미리보기) {
+      지울행.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
+    }
+  }
+
+  if (!행찾기(sh, '계약서')) {
+    var 견적서행 = 행찾기(sh, '견적서');
+    기록.push(이름 + ': 계약서 행 추가 (견적서 아래)');
+    if (!미리보기) {
+      var r;
+      if (견적서행) { sh.insertRowAfter(견적서행); r = 견적서행 + 1; }
+      else r = 행확보(sh, '계약서');
+      sh.getRange(r, 1).setValue('계약서').setFontWeight('bold').setBackground('#F2F4F8');
+    }
+  }
+  return 기록;
+}
+
+/**
+ * 진행행 에 있는데 탭에 없는 행을 **앞 행 바로 아래에** 끼워 넣는다.
+ * 광고주 관리·불발·진행완료 세 탭에 똑같이 한다. 열 이동은 행 번호대로 복사하므로
+ * 한 탭에만 행을 넣으면 그 아래 칸이 한 줄씩 밀려 엉뚱한 행에 들어간다.
+ */
+function 진행행맞추기() {
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+  var 대상 = [문의탭()];
+  ['불발', '진행완료'].forEach(function (n) { var t = ss.getSheetByName(n); if (t) 대상.push(t); });
+  var 기록 = [];
+  대상.forEach(function (sh) {
+    for (var i = 1; i < 진행행.length; i++) {
+      if (행찾기(sh, 진행행[i])) continue;
+      var 앞 = 행찾기(sh, 진행행[i - 1]);
+      if (!앞) { 기록.push('❗' + sh.getName() + ': ' + 진행행[i - 1] + ' 행이 없어 ' + 진행행[i] + ' 을 못 넣었습니다'); continue; }
+      sh.insertRowAfter(앞);
+      sh.getRange(앞 + 1, 1).setValue(진행행[i]).setFontWeight('bold').setBackground('#F2F4F8');
+      기록.push(sh.getName() + ': ' + 진행행[i] + ' 행 추가 (' + (앞 + 1) + '행)');
+    }
+  });
+  return { 성공: true, 기록: 기록 };
+}
+
+/**
+ * 뺀진행행(가이드·공고·보완 필요)을 광고주 관리·불발·진행완료 세 탭에서 지운다.
+ * (2026-10-15 사용자 요청, 한 번만) 세 탭을 함께 지워야 열 이동 때 행이 안 밀린다.
+ * 링크 원본은 가이드·공고 이력 탭에 그대로 있다. 미리보기면 지울 행만 돌려준다.
+ */
+function 진행행삭제(미리보기) {
+  var ss = SpreadsheetApp.openById(통합시트_ID);
+  var 대상 = [문의탭()];
+  ['불발', '진행완료'].forEach(function (n) { var t = ss.getSheetByName(n); if (t) 대상.push(t); });
+  var 기록 = [];
+  대상.forEach(function (sh) {
+    var 지울행 = [];
+    뺀진행행.forEach(function (라벨) {
+      var r = 행찾기(sh, 라벨);
+      if (!r) return;
+      var 채운칸 = sh.getRange(r, 2, 1, Math.max(sh.getLastColumn() - 1, 1)).getValues()[0]
+        .filter(function (v) { return String(v).trim() !== ''; }).length;
+      지울행.push(r);
+      기록.push(sh.getName() + ': ' + 라벨 + ' (' + r + '행, 값 있는 칸 ' + 채운칸 + '개)');
+    });
+    if (미리보기) return;
+    지울행.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
+  });
+  if (!기록.length) 기록.push('지울 행이 없습니다');
+  return { 성공: true, 미리보기: !!미리보기, 기록: 기록 };
+}
+
+/** 칸의 줄마다 [종류] 를 붙인다. 이미 [ 로 시작하면 그대로 둔다. */
+function 종류붙이기(v, 종류) {
+  return String(v == null ? '' : v).split('\n')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s !== ''; })
+    .map(function (s) { return s.charAt(0) === '[' ? s : '[' + 종류 + '] ' + s; });
+}
+
+function 탭배치(ss, 미리보기) {
+  var 기록 = [];
+  var 순서 = [];
+  탭묶음.forEach(function (g) { g.탭.forEach(function (n) { 순서.push({ 이름: n, 색: g.색 }); }); });
+
+  var 위치 = 1;
+  순서.forEach(function (o) {
+    var sh = (o.이름 === '광고주 관리') ? 문의탭() : ss.getSheetByName(o.이름);
+    if (!sh) return;
+    if (!미리보기) {
+      ss.setActiveSheet(sh);
+      ss.moveActiveSheet(위치);
+      sh.setTabColor(o.색);
+    }
+    기록.push('탭 ' + 위치 + '번째: ' + sh.getName());
+    위치++;
+  });
+
+  숨길탭.forEach(function (n) {
+    var sh = ss.getSheetByName(n);
+    if (!sh || sh.isSheetHidden()) return;
+    if (!미리보기) sh.hideSheet();
+    기록.push('숨김: ' + n);
+  });
+  if (!미리보기) ss.setActiveSheet(문의탭());
+  return 기록;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -955,7 +1527,9 @@ function 가이드시트쓰기(탭명, 제목, 항목순서, 데이터) {
     ['브랜드', function (d) { return d.브랜드 || ''; }],
     ['접수일', function (d) { return d.접수일 || ''; }],
     ['최초작성일', function (d) { return d.날짜 || ''; }],
-    ['채널', function (d) { return (d.채널 || []).join(' · '); }]
+    ['채널', function (d) {   // 3-1 생성기는 문자열, 예전 데이터는 배열로 보낸다
+      var c = d.채널 || [];
+      return Array.isArray(c) ? c.join(' · ') : String(c); }]
   ];
 
   var 행 = 2;
@@ -1373,7 +1947,7 @@ function 현황요약() {
     요약.브랜드명빈칸 = 짝없음;
   } catch (e) { 요약.상태별오류 = String(e); }
 
-  // 2) 발행 이력 — 종류·채널별 건수, 공고 없는 건
+  // 2) 가이드·공고 이력 — 종류·채널별 건수, 공고 없는 건
   try {
     var 이력 = 이력읽기();
     var 종채 = {}, 공고없음 = [];
@@ -1468,7 +2042,7 @@ function 일일보고(결과, 변화, 오늘) {
     줄.push('');
   }
 
-  줄.push('■ 발행 이력');
+  줄.push('■ 가이드·공고 이력');
   for (var k2 in (s.발행이력 || {})) 줄.push('   ' + k2 + ' : ' + s.발행이력[k2] + '건');
   줄.push('   5-0 신청서 누적 : ' + (s['5-0응답'] || 0) + '건');
   줄.push('');

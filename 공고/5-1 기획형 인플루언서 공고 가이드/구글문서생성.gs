@@ -111,6 +111,22 @@ function doPost(e) {
       return 응답(체험단_새접수확인());
     }
 
+    // 휴대폰 화면 주소를 메일로 보낸다.
+    if (본문.동작 === '폰주소메일') {
+      if (typeof 폰주소메일 !== 'function') {
+        return 응답({ 성공: false, 오류: '휴대폰화면.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(폰주소메일());
+    }
+
+    // 휴대폰 화면 버튼과 같은 동작을 웹앱으로도 부를 수 있게 (확인용)
+    if (본문.동작 === '폰버튼') {
+      if (typeof 폰실행 !== 'function') {
+        return 응답({ 성공: false, 오류: '휴대폰화면.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답({ 성공: true, 결과: 폰실행(본문.비밀키, 본문.버튼) });
+    }
+
     // 노션 DB 를 비우고 처음부터 다시 만든다. 열쇠 규칙이 바뀐 경우.
     if (본문.동작 === '노션전부지우기') {
       if (typeof 노션_전부지우고다시 !== 'function') {
@@ -241,6 +257,100 @@ function doPost(e) {
         return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
       }
       return 응답(견적기록(본문.견적 || {}));
+    }
+
+    // 사업자등록증 · 계약서 기록, 계약서 작성용 업체 자료 조회 (통합관리.gs)
+    // 드라이브에서 이름에 검색어가 들어간 스프레드시트를 찾는다 (읽기 전용).
+    // 새 구글폼의 응답 시트 ID 를 모를 때 쓴다. 폼 링크(/e/…)로는 응답 시트를 알 수 없다.
+    if (본문.동작 === '시트찾기') {
+      var 검색어 = String(본문.검색어 || '').replace(/'/g, "\\'");
+      var 찾음 = [];
+      var 종류 = 본문.폼 ? 'application/vnd.google-apps.form' : 'application/vnd.google-apps.spreadsheet';
+      var it = DriveApp.searchFiles("title contains '" + 검색어 + "' and mimeType = '" + 종류 + "' and trashed = false");
+      while (it.hasNext() && 찾음.length < 20) {
+        var fl = it.next();
+        var 항목 = { 이름: fl.getName(), 아이디: fl.getId(), 수정: fl.getLastUpdated() };
+        if (본문.폼) {   // 폼이면 연결된 응답 시트와 응답 수도 알려 준다
+          try { var fm = FormApp.openById(fl.getId()); 항목.응답수 = fm.getResponses().length;
+                항목.응답시트 = fm.getDestinationType() === FormApp.DestinationType.SPREADSHEET ? fm.getDestinationId() : '';
+                항목.공개주소 = fm.getPublishedUrl(); } catch (e) { 항목.오류 = String(e); }
+        }
+        찾음.push(항목);
+      }
+      return 응답({ 성공: true, 결과: 찾음 });
+    }
+
+    // 통합 시트의 탭 이름을 gid 로 바꾼다 (깨진 탭 이름 복구용)
+    if (본문.동작 === '탭이름바꾸기') {
+      var 통ss = SpreadsheetApp.openById(통합시트_ID);
+      var 대상 = 통ss.getSheets().filter(function (x) { return x.getSheetId() === Number(본문.gid); })[0];
+      if (!대상) return 응답({ 성공: false, 오류: '탭 없음' });
+      대상.setName(String(본문.새이름));
+      return 응답({ 성공: true, 이름: 대상.getName() });
+    }
+
+    if (본문.동작 === '계약양식시트') {
+      if (typeof 계약양식시트 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(계약양식시트(본문.자료 || {}));
+    }
+
+    if (본문.동작 === '사업자등록기록' || 본문.동작 === '계약서기록' || 본문.동작 === '업체자료') {
+      if (typeof 계약서기록 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      if (본문.동작 === '사업자등록기록') return 응답(사업자등록기록(본문.자료 || {}));
+      if (본문.동작 === '계약서기록') return 응답(계약서기록(본문.자료 || {}));
+      return 응답(업체자료(String(본문.업체명 || '').trim()));
+    }
+
+    // 중복으로 올린 계약서 한 줄 삭제 (통합관리.gs)
+    if (본문.동작 === '계약서삭제') {
+      if (typeof 계약서삭제 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(계약서삭제(본문.자료 || {}));
+    }
+
+    // 카테고리 정리 (한 번만). 미리보기: true 면 아무것도 바꾸지 않고 할 일만 돌려준다.
+    if (본문.동작 === '카테고리정리') {
+      if (typeof 카테고리정리 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(카테고리정리(본문.미리보기 === true));
+    }
+
+    // 진행행 에 새로 넣은 행을 광고주 관리·불발·진행완료 탭에 같은 자리로 만든다 (통합관리.gs)
+    if (본문.동작 === '진행행맞추기') {
+      if (typeof 진행행맞추기 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(진행행맞추기());
+    }
+
+    // 광고주 관리·불발·진행완료 탭에서 가이드·공고·보완 필요 행을 지운다 (한 번만, 통합관리.gs)
+    if (본문.동작 === '진행행삭제') {
+      if (typeof 진행행삭제 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(진행행삭제(본문.미리보기 === true));
+    }
+
+    // 응답 탭 정리 (한 번만, 통합관리.gs)
+    if (본문.동작 === '응답탭정리') {
+      if (typeof 응답탭정리 !== 'function') {
+        return 응답({ 성공: false, 오류: '통합관리.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(응답탭정리());
+    }
+
+    // 노션 광고주 DB 속성을 카테고리에 맞춘다 (한 번만, 노션동기화.gs)
+    if (본문.동작 === '노션속성정리') {
+      if (typeof 노션속성정리 !== 'function') {
+        return 응답({ 성공: false, 오류: '노션동기화.gs 가 프로젝트에 없습니다.' });
+      }
+      return 응답(노션속성정리(본문.미리보기 === true));
     }
 
     // 1시간 주기 갱신을 지금 돌린다. 폼 응답 미러 + 문의 탭 반영.

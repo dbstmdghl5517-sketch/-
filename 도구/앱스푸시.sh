@@ -55,6 +55,8 @@ PAIRS=(
   "연동/통합관리.gs|연동/통합관리.js"
   "연동/아임웹_시트연동.gs|연동/아임웹_시트연동.js"
   "연동/노션동기화.gs|연동/노션동기화.js"
+  "연동/휴대폰화면.gs|연동/휴대폰화면.js"
+  "연동/공동구매.gs|연동/공동구매.js"
 )
 
 차이보기() {
@@ -82,6 +84,10 @@ if [[ "$MODE" == "받기" ]]; then
   echo "프로젝트 → 저장소"
   "$CLASP" pull >/dev/null
   for PAIR in "${PAIRS[@]}"; do
+    # 프로젝트에 아직 없는 파일은 건너뛴다. set -e 라 cp 가 실패하면 나머지를 못 받는다.
+    if [[ ! -f "$WORK/${PAIR##*|}" ]]; then
+      echo "  건너뜀: ${PAIR%%|*} (프로젝트에 없음)"; continue
+    fi
     cp "$WORK/${PAIR##*|}" "$ROOT/${PAIR%%|*}"
     echo "  받음: ${PAIR%%|*}"
   done
@@ -117,7 +123,7 @@ for PAIR in "${PAIRS[@]}"; do rm -f "$WORK/${PAIR##*|}"; done
 echo "── 확인 ──"
 if 차이보기; then
   echo
-  echo "✅ 세 파일 모두 저장소와 같습니다."
+  echo "✅ ${#PAIRS[@]}개 파일 모두 저장소와 같습니다."
 else
   echo
   echo "❗아직 다른 파일이 있습니다. 위 목록을 확인하세요." >&2

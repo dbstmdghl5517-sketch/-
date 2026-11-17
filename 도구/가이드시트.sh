@@ -46,7 +46,11 @@ cat > "$TMP/wrap.pl" <<'PERLEOF'
 use strict; use warnings;
 use utf8;
 use JSON::PP;
+use Encode qw(decode);
 my ($src, $key, $tab, $title, $out) = @ARGV;
+# 인자는 바이트로 들어온다. 풀지 않으면 encode_json 이 한 번 더 인코딩해 탭 이름이 깨진다
+# (2026-10-02 「3-1 ì²´íë¨…」 으로 깨진 채 만들어졌다)
+$tab = decode('UTF-8', $tab); $title = decode('UTF-8', $title);
 $key =~ s/[^A-Za-z0-9_-]//g;
 
 local $/;
